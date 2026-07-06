@@ -49,10 +49,30 @@ export function createGiveawaysResponseSchema<const Store extends string>(store:
 export const EpicGamesGiveawaysResponseSchema = createGiveawaysResponseSchema("epic-games");
 export const PrimeGamingGiveawaysResponseSchema = createGiveawaysResponseSchema("prime-gaming");
 
+/** Store ids the aggregate endpoint fans out to, in response order. */
+export const STORE_IDS = ["epic-games", "prime-gaming"] as const;
+export type StoreId = (typeof STORE_IDS)[number];
+
+/** A giveaway tagged with its source store; only the aggregate endpoint adds the tag. */
+export const StoreGiveawaySchema = t.Composite([
+  GiveawaySchema,
+  t.Object({ store: t.UnionEnum(STORE_IDS, { description: "Source store" }) }),
+]);
+
+export const AllGiveawaysResponseSchema = t.Object({
+  count: t.Integer(),
+  giveaways: t.Array(StoreGiveawaySchema),
+  errors: t.Array(t.Object({ store: t.UnionEnum(STORE_IDS), error: t.String() }), {
+    description: "Stores whose upstream fetch failed; empty when every store succeeded",
+  }),
+});
+
 export const ErrorResponseSchema = t.Object({
   error: t.String(),
 });
 
 export type Giveaway = typeof GiveawaySchema.static;
+export type StoreGiveaway = typeof StoreGiveawaySchema.static;
 export type EpicGamesGiveawaysResponse = typeof EpicGamesGiveawaysResponseSchema.static;
 export type PrimeGamingGiveawaysResponse = typeof PrimeGamingGiveawaysResponseSchema.static;
+export type AllGiveawaysResponse = typeof AllGiveawaysResponseSchema.static;

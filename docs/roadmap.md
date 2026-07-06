@@ -12,6 +12,8 @@ descriptions, and the details needed to surface or claim each offer.
 
 ### Stores
 
+- **All stores** — `GET /giveaways` — merged list across every store, each item tagged with its
+  `store`; stores that fail upstream land in `errors` instead of failing the request.
 - **Epic Games** — `GET /giveaways/epic-games`
 - **Amazon Prime Gaming** — `GET /giveaways/prime-gaming` (full games only; in-game loot excluded)
 
