@@ -1,8 +1,13 @@
 import { Elysia } from "elysia";
 
 import { logger } from "../../utils/logger.ts";
-import { ErrorResponseSchema, GiveawaysQuerySchema, GiveawaysResponseSchema } from "./model.ts";
-import { getEpicGamesFreeGames } from "./service.ts";
+import {
+  EpicGamesGiveawaysResponseSchema,
+  ErrorResponseSchema,
+  GiveawaysQuerySchema,
+  PrimeGamingGiveawaysResponseSchema,
+} from "./model.ts";
+import { getEpicGamesFreeGames, getPrimeGamingFreeGames } from "./service.ts";
 import { UpstreamError } from "./stores/shared.ts";
 
 export const giveaways = new Elysia({ prefix: "/giveaways" })
@@ -15,6 +20,11 @@ export const giveaways = new Elysia({ prefix: "/giveaways" })
   })
   .get("/epic-games", ({ query }) => getEpicGamesFreeGames(query), {
     query: GiveawaysQuerySchema,
-    response: { 200: GiveawaysResponseSchema, 502: ErrorResponseSchema },
+    response: { 200: EpicGamesGiveawaysResponseSchema, 502: ErrorResponseSchema },
     detail: { summary: "List currently-free Epic Games giveaways", tags: ["giveaways"] },
+  })
+  .get("/prime-gaming", ({ query }) => getPrimeGamingFreeGames(query), {
+    query: GiveawaysQuerySchema,
+    response: { 200: PrimeGamingGiveawaysResponseSchema, 502: ErrorResponseSchema },
+    detail: { summary: "List currently-free Prime Gaming full games", tags: ["giveaways"] },
   });

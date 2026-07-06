@@ -22,23 +22,37 @@ export const GiveawaySchema = t.Object({
   url: t.Nullable(t.String({ description: "Store page URL" })),
   imageUrl: t.Nullable(t.String()),
   seller: t.String(),
-  price: t.Object({
-    original: t.Integer({ description: "Original price in the smallest currency unit (cents)" }),
-    formatted: t.String({ description: "Human-readable original price, e.g. €35.99" }),
-    currency: t.String({ description: "ISO 4217 currency code" }),
-  }),
+  price: t.Nullable(
+    t.Object(
+      {
+        original: t.Integer({
+          description: "Original price in the smallest currency unit (cents)",
+        }),
+        formatted: t.String({ description: "Human-readable original price, e.g. €35.99" }),
+        currency: t.String({ description: "ISO 4217 currency code" }),
+      },
+      { description: "Original price before the giveaway; null when the store exposes no price" },
+    ),
+  ),
   freeUntil: t.String({ description: "End of the giveaway window, ISO 8601" }),
 });
 
-export const GiveawaysResponseSchema = t.Object({
-  store: t.Literal("epic-games"),
-  count: t.Integer(),
-  giveaways: t.Array(GiveawaySchema),
-});
+/** Response envelope factory: each store keeps a precise `store` literal in its OpenAPI spec. */
+export function createGiveawaysResponseSchema<const Store extends string>(store: Store) {
+  return t.Object({
+    store: t.Literal(store),
+    count: t.Integer(),
+    giveaways: t.Array(GiveawaySchema),
+  });
+}
+
+export const EpicGamesGiveawaysResponseSchema = createGiveawaysResponseSchema("epic-games");
+export const PrimeGamingGiveawaysResponseSchema = createGiveawaysResponseSchema("prime-gaming");
 
 export const ErrorResponseSchema = t.Object({
   error: t.String(),
 });
 
 export type Giveaway = typeof GiveawaySchema.static;
-export type GiveawaysResponse = typeof GiveawaysResponseSchema.static;
+export type EpicGamesGiveawaysResponse = typeof EpicGamesGiveawaysResponseSchema.static;
+export type PrimeGamingGiveawaysResponse = typeof PrimeGamingGiveawaysResponseSchema.static;

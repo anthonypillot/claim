@@ -4,7 +4,10 @@ import type { EpicFreeGamesResponse, EpicOffer } from "./types.ts";
 const EPIC_URL = "https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions";
 
 /** Raw upstream access: returns every offer Epic lists, unfiltered. */
-export async function fetchFreeGamesPromotions(options: { locale: string; country: string }): Promise<EpicOffer[]> {
+export async function fetchFreeGamesPromotions(options: {
+  locale: string;
+  country: string;
+}): Promise<EpicOffer[]> {
   const url = new URL(EPIC_URL);
   url.searchParams.set("locale", options.locale);
   url.searchParams.set("country", options.country.toUpperCase());

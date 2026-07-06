@@ -13,10 +13,11 @@ descriptions, and the details needed to surface or claim each offer.
 ### Stores
 
 - **Epic Games** — `GET /giveaways/epic-games`
+- **Amazon Prime Gaming** — `GET /giveaways/prime-gaming` (full games only; in-game loot excluded)
 
 ### More stores
 
-Amazon Prime Gaming, Steam, GOG, and GamerPower are next.
+Steam, GOG, and GamerPower are next.
 
 ### Scheduled notifications
 

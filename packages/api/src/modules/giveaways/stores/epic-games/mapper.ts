@@ -20,7 +20,10 @@ function activeFreeWindow(offer: EpicOffer, now: Date): { endDate: string } | un
 function toGiveaway(offer: EpicOffer, freeUntil: string, locale: string): Giveaway {
   // urlSlug is an opaque hash — never use it for store URLs.
   const pageSlug =
-    offer.offerMappings?.[0]?.pageSlug ?? offer.catalogNs?.mappings?.[0]?.pageSlug ?? offer.productSlug ?? null;
+    offer.offerMappings?.[0]?.pageSlug ??
+    offer.catalogNs?.mappings?.[0]?.pageSlug ??
+    offer.productSlug ??
+    null;
   const imageUrl =
     IMAGE_PREFERENCE.map((type) => offer.keyImages?.find((image) => image.type === type)?.url).find(
       (url): url is string => url !== undefined,

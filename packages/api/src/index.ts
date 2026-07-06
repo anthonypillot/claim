@@ -6,7 +6,10 @@ import { giveaways } from "./modules/giveaways/index.ts";
 import { logger } from "./utils/logger.ts";
 
 const applicationPackageJson = await Bun.file("../../package.json").json();
-const name = applicationPackageJson.name.charAt(0).toUpperCase() + applicationPackageJson.name.slice(1) + " API";
+const name =
+  applicationPackageJson.name.charAt(0).toUpperCase() +
+  applicationPackageJson.name.slice(1) +
+  " API";
 
 const apiPackageJson = await Bun.file("package.json").json();
 
