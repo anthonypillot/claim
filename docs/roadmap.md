@@ -16,10 +16,11 @@ descriptions, and the details needed to surface or claim each offer.
   `store`; stores that fail upstream land in `errors` instead of failing the request.
 - **Epic Games** — `GET /giveaways/epic-games`
 - **Amazon Prime Gaming** — `GET /giveaways/prime-gaming` (full games only; in-game loot excluded)
+- **GOG** — `GET /giveaways/gog` (homepage banner giveaways; empty when none is running)
 
 ### More stores
 
-Steam, GOG, and GamerPower are next.
+Steam and GamerPower are next.
 
 ### Scheduled notifications
 
