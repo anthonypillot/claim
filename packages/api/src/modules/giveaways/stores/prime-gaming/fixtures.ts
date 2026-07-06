@@ -20,6 +20,7 @@ export const primeFreeGamesFixture: PrimeFreeGamesResponse = {
             externalClaimLink: "https://gaming.amazon.com/actually-free/dp/item-active-full-game",
             shortformDescription: "A free full game.",
             cardMedia: { defaultMedia: { src1x: "https://cdn.example.com/card.jpg" } },
+            heroMedia: { defaultMedia: { src1x: "https://cdn.example.com/hero.jpg" } },
           },
           offers: [{ startTime: "2000-01-01T00:00:00Z", endTime: "2099-12-31T00:00:00Z" }],
           game: { assets: { title: "Actually Free Full Game", publisher: "WayForward" } },

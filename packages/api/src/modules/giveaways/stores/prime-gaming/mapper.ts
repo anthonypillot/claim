@@ -24,10 +24,12 @@ function toGiveaway(item: PrimeItem, freeUntil: string): Giveaway {
     title: item.game?.assets?.title ?? item.assets?.title ?? "",
     description: item.assets?.shortformDescription ?? "",
     url: item.assets?.externalClaimLink ?? null,
+    // The hero banner is the only wide-format art; the small card image fits the thumbnail
+    // slot (both are 16:9 — Prime exposes no portrait art).
     images: {
-      wide: item.assets?.cardMedia?.defaultMedia?.src1x ?? null,
+      wide: item.assets?.heroMedia?.defaultMedia?.src1x ?? null,
       tall: null,
-      thumbnail: null,
+      thumbnail: item.assets?.cardMedia?.defaultMedia?.src1x ?? null,
     },
     seller: item.game?.assets?.publisher ?? "Unknown",
     // Prime Gaming exposes no price data for its giveaways.

@@ -30,6 +30,11 @@ const OFFERS_QUERY = `query OffersContext_Offers_And_Items($pageSize: Int) {
             src1x
           }
         }
+        heroMedia {
+          defaultMedia {
+            src1x
+          }
+        }
       }
       offers {
         startTime
