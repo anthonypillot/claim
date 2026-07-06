@@ -1,0 +1,39 @@
+{
+  "name": "claim",
+  "version": "1.0.0",
+  "description": "Claim aggregates currently free game giveaways from Epic Games, Amazon Prime Gaming, GOG, and Steam.",
+  "license": "GPL-3.0-or-later",
+  "author": {
+    "name": "Anthony Pillot",
+    "url": "https://anthonypillot.com"
+  },
+  "workspaces": [
+    "packages/**"
+  ],
+  "type": "module",
+  "scripts": {
+    "clean": "bun run --workspaces --if-present clean",
+    "dev": "bun run --workspaces dev",
+    "build": "bun run --workspaces build",
+    "test": "bun run --workspaces test",
+    "test:watch": "bun run --workspaces test:watch",
+    "test:coverage": "bun run --workspaces test:coverage",
+    "lint": "bun run --workspaces --if-present lint",
+    "lint:fix": "bun run --workspaces --if-present lint:fix",
+    "format": "bun run --workspaces --if-present format",
+    "format:check": "bun run --workspaces --if-present format:check",
+    "typecheck": "bun run --workspaces --if-present typecheck",
+    "version:check": "bun scripts/check-versions.mjs",
+    "verify": "bun run version:check && bun run lint && bun run format:check && bun run typecheck && bun run --cwd packages/web check && bun test && bun run build"
+  },
+  "devDependencies": {
+    "@semantic-release/changelog": "^7.0.0",
+    "@semantic-release/exec": "^7.1.0",
+    "@semantic-release/git": "^11.0.1",
+    "@types/bun": "^1.3.14",
+    "oxfmt": "^0.60.0",
+    "oxlint": "^1.75.0",
+    "semantic-release": "^25.0.8",
+    "typescript": "^6.0.3"
+  }
+}

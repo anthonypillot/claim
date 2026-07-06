@@ -1,0 +1,43 @@
+# dependencies
+node_modules
+
+# build output
+build
+out
+dist
+.output
+.svelte-kit
+*.tgz
+
+# coverage and logs
+coverage
+playwright-report
+test-results
+*.lcov
+logs
+*.log
+report.[0-9]*.json
+
+# local configuration
+.env*
+.cache
+.eslintcache
+*.tsbuildinfo
+
+# repository and documentation
+.git
+.github
+.agents
+docs
+.idea
+.DS_Store
+AGENTS.md
+README*
+skills-lock.json
+release.config.mjs
+.oxfmtrc.json
+.oxlintrc.json
+
+# source used only by tests
+**/*.test.ts
+**/fixtures.ts

@@ -1,0 +1,145 @@
+name: 🧪 On pull request
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: on-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  extract:
+    name: 📄 Extract version
+    uses: anthonypillot/actions/.github/workflows/extract-version.yaml@main
+
+  verify:
+    name: 🧪 Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@v6
+
+      - name: 🐰 Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.x
+
+      - name: 📦 Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🏷️ Check package versions
+        run: bun run version:check
+
+      - name: 🧹 Lint
+        run: bun run lint
+
+      - name: 📝 Check formatting
+        run: bun run format:check
+
+      - name: 🔎 Typecheck
+        run: bun run typecheck
+
+      - name: 🔎 Check web
+        run: bun run --cwd packages/web check
+
+      - name: 🧪 Test
+        run: bun test
+
+      - name: 🏗️ Build
+        run: bun run build
+
+  verify-images:
+    name: 🐳 Verify ${{ matrix.image }} image
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: claim-api
+            dockerfile: packages/api/Dockerfile
+          - image: claim-web
+            dockerfile: packages/web/Dockerfile
+
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@v6
+
+      - name: 🛠 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: 🐳 Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          pull: true
+          platforms: linux/amd64
+          tags: ${{ matrix.image }}:smoke
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      - name: 🚀 Start image
+        run: docker run --detach --name "${{ matrix.image }}-smoke" --publish 3000:3000 --env PUBLIC_API_URL=http://127.0.0.1:3000 "${{ matrix.image }}:smoke"
+
+      - name: ❤️ Check image health
+        run: curl --fail --retry 10 --retry-all-errors --retry-delay 1 http://127.0.0.1:3000/health
+
+      - name: 🛑 Stop image
+        if: always()
+        run: docker rm --force "${{ matrix.image }}-smoke" || true
+
+  publish-preview:
+    name: 🐳 Publish ${{ matrix.image }} preview
+    needs: [extract, verify-images]
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: claim-api
+            dockerfile: packages/api/Dockerfile
+          - image: claim-web
+            dockerfile: packages/web/Dockerfile
+
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@v6
+
+      - name: ⚙️ Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: 🛠 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: 📲 Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🐳 Build and push preview image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          pull: true
+          platforms: linux/amd64,linux/arm64
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.extract.outputs.result }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.event.pull_request.head.sha }}
+            org.opencontainers.image.version=${{ needs.extract.outputs.result }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

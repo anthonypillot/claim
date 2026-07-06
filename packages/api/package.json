@@ -1,0 +1,45 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "description": "API of the Claim application, built with Elysia.",
+  "license": "GPL-3.0-or-later",
+  "author": {
+    "name": "Anthony Pillot",
+    "url": "https://anthonypillot.com"
+  },
+  "type": "module",
+  "main": "build/index.js",
+  "scripts": {
+    "clean": "rm -rf ./build",
+    "dev": "bun run --watch src/index.ts",
+    "build": "bun run clean && bun build --target=bun --outdir ./build ./src/index.ts",
+    "build:production": "bun run clean && bun build --target=bun --production --outdir ./build ./src/index.ts",
+    "start": "NODE_ENV=production bun ./build/index.js",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1.4.2",
+    "@elysiajs/openapi": "^1.4.15",
+    "drizzle-orm": "^1.0.0-rc.4",
+    "elysia": "^1.4.15",
+    "pino": "^10.3.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@types/bun": "^1.3.14",
+    "@types/node": "^26.0.1",
+    "drizzle-kit": "^1.0.0-rc.4",
+    "pino-pretty": "^13.1.3"
+  }
+}
