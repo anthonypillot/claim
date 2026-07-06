@@ -46,7 +46,11 @@ describe("fetchFreeGames", () => {
         title: "Actually Free Full Game",
         description: "A free full game.",
         url: "https://gaming.amazon.com/actually-free/dp/item-active-full-game",
-        imageUrl: "https://cdn.example.com/card.jpg",
+        images: {
+          wide: "https://cdn.example.com/card.jpg",
+          tall: null,
+          thumbnail: null,
+        },
         seller: "WayForward",
         price: null,
         freeUntil: "2099-12-31T00:00:00Z",

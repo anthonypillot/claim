@@ -15,12 +15,24 @@ export const GiveawaysQuerySchema = t.Object({
   }),
 });
 
+export const GiveawayImagesSchema = t.Object(
+  {
+    wide: t.Nullable(t.String({ description: "Landscape/hero artwork URL" })),
+    tall: t.Nullable(t.String({ description: "Portrait/box artwork URL" })),
+    thumbnail: t.Nullable(t.String({ description: "Small preview artwork URL" })),
+  },
+  {
+    description:
+      "Store artwork by semantic slot; a slot is null when the store exposes no image for it",
+  },
+);
+
 export const GiveawaySchema = t.Object({
   id: t.String({ description: "Store offer identifier" }),
   title: t.String(),
   description: t.String(),
   url: t.Nullable(t.String({ description: "Store page URL" })),
-  imageUrl: t.Nullable(t.String()),
+  images: GiveawayImagesSchema,
   seller: t.String(),
   price: t.Nullable(
     t.Object(
@@ -73,6 +85,7 @@ export const ErrorResponseSchema = t.Object({
 });
 
 export type Giveaway = typeof GiveawaySchema.static;
+export type GiveawayImages = typeof GiveawayImagesSchema.static;
 export type StoreGiveaway = typeof StoreGiveawaySchema.static;
 export type EpicGamesGiveawaysResponse = typeof EpicGamesGiveawaysResponseSchema.static;
 export type PrimeGamingGiveawaysResponse = typeof PrimeGamingGiveawaysResponseSchema.static;

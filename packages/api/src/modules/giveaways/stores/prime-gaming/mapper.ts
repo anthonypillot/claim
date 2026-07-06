@@ -24,7 +24,11 @@ function toGiveaway(item: PrimeItem, freeUntil: string): Giveaway {
     title: item.game?.assets?.title ?? item.assets?.title ?? "",
     description: item.assets?.shortformDescription ?? "",
     url: item.assets?.externalClaimLink ?? null,
-    imageUrl: item.assets?.cardMedia?.defaultMedia?.src1x ?? null,
+    images: {
+      wide: item.assets?.cardMedia?.defaultMedia?.src1x ?? null,
+      tall: null,
+      thumbnail: null,
+    },
     seller: item.game?.assets?.publisher ?? "Unknown",
     // Prime Gaming exposes no price data for its giveaways.
     price: null,

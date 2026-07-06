@@ -28,7 +28,11 @@ describe("fetchFreeGames", () => {
         title: "Actually Free Game",
         description: "A free base game.",
         url: "https://store.epicgames.com/en-US/p/actually-free-game",
-        imageUrl: "https://cdn.example.com/wide.png",
+        images: {
+          wide: "https://cdn.example.com/wide.png",
+          tall: "https://cdn.example.com/tall.png",
+          thumbnail: "https://cdn.example.com/thumb.png",
+        },
         seller: "WayForward",
         price: { original: 3599, formatted: "€35.99", currency: "EUR" },
         freeUntil: "2099-12-31T00:00:00.000Z",

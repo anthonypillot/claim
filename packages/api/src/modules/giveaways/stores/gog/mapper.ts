@@ -31,7 +31,11 @@ function toGiveaway(product: GogGiveawayProduct, freeUntil: string, locale: stri
     // The giveaway section carries no description.
     description: "",
     url,
-    imageUrl: product.coverHorizontal ?? product.coverVertical ?? null,
+    images: {
+      wide: product.coverHorizontal ?? null,
+      tall: product.coverVertical ?? null,
+      thumbnail: null,
+    },
     // The section payload names no publisher and, being a giveaway, exposes no price.
     seller: "GOG",
     price: null,

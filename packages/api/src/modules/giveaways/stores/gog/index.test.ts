@@ -44,7 +44,11 @@ describe("fetchFreeGames", () => {
         title: "Actually Free GOG Game",
         description: "",
         url: "https://www.gog.com/en/game/actually_free_gog_game",
-        imageUrl: "https://images.gog-statics.com/cover-horizontal.png",
+        images: {
+          wide: "https://images.gog-statics.com/cover-horizontal.png",
+          tall: "https://images.gog-statics.com/cover-vertical.jpg",
+          thumbnail: null,
+        },
         seller: "GOG",
         price: null,
         freeUntil: "2099-12-31T00:00:00+00:00",
