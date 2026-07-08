@@ -5,6 +5,7 @@ import type {
   Giveaway,
   GogGiveawaysResponse,
   PrimeGamingGiveawaysResponse,
+  SteamGiveawaysResponse,
   StoreGiveaway,
   StoreId,
 } from "./model.ts";
@@ -12,6 +13,7 @@ import { STORE_IDS } from "./model.ts";
 import { fetchFreeGames as fetchEpicGamesGiveaways } from "./stores/epic-games/index.ts";
 import { fetchFreeGames as fetchGogGiveaways } from "./stores/gog/index.ts";
 import { fetchFreeGames as fetchPrimeGamingGiveaways } from "./stores/prime-gaming/index.ts";
+import { fetchFreeGames as fetchSteamGiveaways } from "./stores/steam/index.ts";
 import type { FetchFreeGames } from "./stores/shared.ts";
 import { UpstreamError } from "./stores/shared.ts";
 
@@ -40,11 +42,20 @@ export async function getGogFreeGames(options: {
   return { store: "gog", count: giveaways.length, giveaways };
 }
 
+export async function getSteamFreeGames(options: {
+  locale: string;
+  country: string;
+}): Promise<SteamGiveawaysResponse> {
+  const giveaways = await fetchSteamGiveaways(options);
+  return { store: "steam", count: giveaways.length, giveaways };
+}
+
 // Adding a store id to STORE_IDS is a compile error until its fetcher is registered here.
 const storeFetchers = {
   "epic-games": fetchEpicGamesGiveaways,
   "prime-gaming": fetchPrimeGamingGiveaways,
   gog: fetchGogGiveaways,
+  steam: fetchSteamGiveaways,
 } as const satisfies Record<StoreId, FetchFreeGames>;
 
 type StoreResult =

@@ -17,10 +17,12 @@ descriptions, and the details needed to surface or claim each offer.
 - **Epic Games** — `GET /giveaways/epic-games`
 - **Amazon Prime Gaming** — `GET /giveaways/prime-gaming` (full games only; in-game loot excluded)
 - **GOG** — `GET /giveaways/gog` (homepage banner giveaways; empty when none is running)
+- **Steam** — `GET /giveaways/steam` (time-limited "keep forever" 100%-off promos; free-to-play
+  titles excluded; empty when none is running)
 
 ### More stores
 
-Steam and GamerPower are next.
+GamerPower is next.
 
 ### Scheduled notifications
 
