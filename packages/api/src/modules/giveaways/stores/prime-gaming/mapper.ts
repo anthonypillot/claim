@@ -8,7 +8,7 @@ import type { PrimeItem } from "./types.ts";
  * windows fall out here (NaN date comparisons are false, so garbage dates fall out too). Returns
  * the matched window so `freeUntil` falls out of the filter.
  */
-function activeFullGameWindow(item: PrimeItem, now: Date): { endTime: string } | undefined {
+function getActiveFullGameWindow(item: PrimeItem, now: Date): { endTime: string } | undefined {
   if (item.isFGWP !== true || item.category !== "FULL_GAME") return undefined;
   for (const offer of item.offers ?? []) {
     if (!offer.endTime) continue;
@@ -19,17 +19,20 @@ function activeFullGameWindow(item: PrimeItem, now: Date): { endTime: string } |
 }
 
 function toGiveaway(item: PrimeItem, freeUntil: string): Giveaway {
+  const hero = item.assets?.heroMedia?.defaultMedia?.src1x ?? null;
+  const card = item.assets?.cardMedia?.defaultMedia?.src1x ?? null;
   return {
     id: item.id,
     title: item.game?.assets?.title ?? item.assets?.title ?? "",
     description: item.assets?.shortformDescription ?? "",
     url: item.assets?.externalClaimLink ?? null,
-    // The hero banner is the only wide-format art; the small card image fits the thumbnail
-    // slot (both are 16:9 — Prime exposes no portrait art).
+    // Prefer the hero banner for the wide slot, falling back to the card image so the slot is
+    // never empty; the card also fills the thumbnail slot (both are 16:9 — Prime exposes no
+    // portrait art).
     images: {
-      wide: item.assets?.heroMedia?.defaultMedia?.src1x ?? null,
+      wide: hero ?? card,
       tall: null,
-      thumbnail: item.assets?.cardMedia?.defaultMedia?.src1x ?? null,
+      thumbnail: card,
     },
     seller: item.game?.assets?.publisher ?? "Unknown",
     // Prime Gaming exposes no price data for its giveaways.
@@ -42,7 +45,7 @@ function toGiveaway(item: PrimeItem, freeUntil: string): Giveaway {
 export function toGiveaways(items: PrimeItem[]): Giveaway[] {
   const now = new Date();
   return items.flatMap((item) => {
-    const window = activeFullGameWindow(item, now);
+    const window = getActiveFullGameWindow(item, now);
     return window ? [toGiveaway(item, window.endTime)] : [];
   });
 }

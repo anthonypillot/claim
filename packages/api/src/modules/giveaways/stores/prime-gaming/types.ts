@@ -22,4 +22,5 @@ export interface PrimeItem {
 
 export interface PrimeFreeGamesResponse {
   data?: { games?: { items?: PrimeItem[] } };
+  errors?: { message?: string }[] | null;
 }

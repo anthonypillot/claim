@@ -120,4 +120,31 @@ describe("fetchFreeGames", () => {
       "unexpected upstream response shape",
     );
   });
+
+  it("throws UpstreamError surfacing the graphql error message", async () => {
+    stubFetch({
+      graphql: () =>
+        graphqlResponse({
+          errors: [{ message: "Field 'heroMedia' doesn't exist on type 'Assets'" }],
+        }),
+    });
+
+    await expect(fetchFreeGames({ locale: "en-US", country: "US" })).rejects.toThrow(
+      "upstream graphql error: Field 'heroMedia' doesn't exist on type 'Assets'",
+    );
+  });
+
+  it("falls back to the card image for the wide slot when hero media is absent", async () => {
+    const body = structuredClone(primeFreeGamesFixture);
+    delete body.data!.games!.items![0]!.assets!.heroMedia;
+    stubFetch({ graphql: () => graphqlResponse(body) });
+
+    const [game] = await fetchFreeGames({ locale: "en-US", country: "US" });
+
+    expect(game?.images).toEqual({
+      wide: "https://cdn.example.com/card.jpg",
+      tall: null,
+      thumbnail: "https://cdn.example.com/card.jpg",
+    });
+  });
 });

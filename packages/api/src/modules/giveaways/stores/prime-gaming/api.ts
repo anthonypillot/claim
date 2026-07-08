@@ -108,7 +108,12 @@ export async function fetchFreeGamesItems(options: {
     throw new UpstreamError(STORE, "upstream request failed", { cause });
   }
 
-  // GraphQL errors come back as 200s with no data — the shape check catches those too.
+  // GraphQL errors come back as 200s with no data; surface the first message so a broken
+  // query (e.g. an unknown field) is diagnosable in logs instead of a generic shape error.
+  if (body.errors?.length) {
+    const message = body.errors[0]?.message ?? "unknown error";
+    throw new UpstreamError(STORE, `upstream graphql error: ${message}`);
+  }
   const items = body.data?.games?.items;
   if (!Array.isArray(items)) {
     throw new UpstreamError(STORE, "unexpected upstream response shape");
