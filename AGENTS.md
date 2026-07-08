@@ -50,3 +50,4 @@ Tests use `bun:test`. Outbound HTTP is stubbed with `spyOn(globalThis, "fetch")`
 - Named function declarations (`function foo() {}`) over arrow-function consts; `satisfies` for conformance to contract types.
 - Formatting via oxfmt (100-col width, double quotes, trailing commas); linting via oxlint (correctness = error, suspicious = warn). `fixtures.ts` files are ignored by lint and coverage.
 - Logging goes through `src/utils/logger.ts` (pino). `pino-pretty` is dev-only and must stay out of the production bundle — it's referenced only via the transport target string.
+- Never commit, never create pull requests, except if the user explicitly asks for it.
