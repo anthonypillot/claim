@@ -4,7 +4,7 @@ This file provides guidance to Code Agents when working with code in this reposi
 
 ## What this is
 
-Claim is a small, read-only JSON HTTP API that aggregates free game giveaways across storefronts (Epic Games, Prime Gaming, and GOG today; Steam and GamerPower planned). Bun workspace monorepo (`packages/**`) with one package: `packages/api`, built on **Bun + Elysia + TypeBox**. See `docs/roadmap.md` (feature direction) and `docs/architecture.md` (target file tree).
+Claim is a small, read-only JSON HTTP API that aggregates free game giveaways across storefronts (Epic Games, Prime Gaming, GOG, and Steam today; GamerPower planned). Bun workspace monorepo (`packages/**`) with one package: `packages/api`, built on **Bun + Elysia + TypeBox**. See `docs/roadmap.md` (feature direction) and `docs/architecture.md` (target file tree).
 
 ## Commands
 

@@ -4,17 +4,19 @@ import { giveaways } from "./index.ts";
 import { epicFreeGamesFixture } from "./stores/epic-games/fixtures.ts";
 import { gogGiveawaySectionFixtures, gogSectionsFixture } from "./stores/gog/fixtures.ts";
 import { primeFreeGamesFixture, primeHomeHtmlFixture } from "./stores/prime-gaming/fixtures.ts";
+import { steamFeaturedCategoriesFixture, steamGetItemsFixture } from "./stores/steam/fixtures.ts";
 
 const ALL_URL = "http://localhost/giveaways";
 const EPIC_URL = "http://localhost/giveaways/epic-games";
 const PRIME_URL = "http://localhost/giveaways/prime-gaming";
 const GOG_URL = "http://localhost/giveaways/gog";
+const STEAM_URL = "http://localhost/giveaways/steam";
 
 let fetchSpy: ReturnType<typeof spyOn<typeof globalThis, "fetch">>;
 
 // One stub for every upstream a route may hit: Epic's promotions endpoint, GOG's two-step
-// section-list + giveaway-section flow, and Prime Gaming's two-step session-bootstrap +
-// GraphQL flow.
+// section-list + giveaway-section flow, Steam's two-step featured + store-browse flow, and Prime
+// Gaming's two-step session-bootstrap + GraphQL flow.
 async function stubUpstreamFetch(input: string | URL | Request): Promise<Response> {
   const url = String(input instanceof Request ? input.url : input);
   if (url.includes("epicgames.com")) {
@@ -25,6 +27,14 @@ async function stubUpstreamFetch(input: string | URL | Request): Promise<Respons
   if (url.includes("sections.gog.com")) {
     const sectionId = /\/sections\/([^/?]+)/.exec(url)?.[1];
     const body = sectionId ? (gogGiveawaySectionFixtures[sectionId] ?? {}) : gogSectionsFixture;
+    return new Response(JSON.stringify(body), {
+      headers: { "content-type": "application/json" },
+    });
+  }
+  if (url.includes("steampowered.com")) {
+    const body = url.includes("IStoreBrowseService/GetItems")
+      ? steamGetItemsFixture
+      : steamFeaturedCategoriesFixture;
     return new Response(JSON.stringify(body), {
       headers: { "content-type": "application/json" },
     });
@@ -57,11 +67,12 @@ describe("GET /giveaways", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      count: 3,
+      count: 4,
       giveaways: [
         { store: "epic-games", id: "offer-free-base-game", title: "Actually Free Game" },
         { store: "prime-gaming", id: "item-active-full-game", title: "Actually Free Full Game" },
         { store: "gog", id: "1207658787", title: "Actually Free GOG Game" },
+        { store: "steam", id: "100100", title: "Actually Free Steam Game" },
       ],
       errors: [],
     });
@@ -78,10 +89,11 @@ describe("GET /giveaways", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      count: 2,
+      count: 3,
       giveaways: [
         expect.objectContaining({ store: "prime-gaming", id: "item-active-full-game" }),
         expect.objectContaining({ store: "gog", id: "1207658787" }),
+        expect.objectContaining({ store: "steam", id: "100100" }),
       ],
       errors: [{ store: "epic-games", error: "Failed to fetch giveaways from epic-games" }],
     });
@@ -98,10 +110,11 @@ describe("GET /giveaways", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      count: 2,
+      count: 3,
       giveaways: [
         expect.objectContaining({ store: "epic-games", id: "offer-free-base-game" }),
         expect.objectContaining({ store: "gog", id: "1207658787" }),
+        expect.objectContaining({ store: "steam", id: "100100" }),
       ],
       errors: [{ store: "prime-gaming", error: "Failed to fetch giveaways from prime-gaming" }],
     });
@@ -132,6 +145,12 @@ describe("GET /giveaways", () => {
       String(input).includes("sections.gog.com"),
     );
     expect(String(gogCall?.[0])).toContain("locale=fr-FR");
+
+    const steamCall = fetchSpy.mock.calls.find(([input]) =>
+      String(input).includes("featuredcategories"),
+    );
+    expect(String(steamCall?.[0])).toContain("cc=FR");
+    expect(String(steamCall?.[0])).toContain("l=french");
   });
 
   it("rejects an invalid locale with 422", async () => {
@@ -268,6 +287,50 @@ describe("GET /giveaways/gog", () => {
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({
       error: "Failed to fetch giveaways from gog",
+    });
+  });
+});
+
+describe("GET /giveaways/steam", () => {
+  it("returns the envelope with only the currently-live free-to-keep giveaway", async () => {
+    const response = await giveaways.handle(new Request(STEAM_URL));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      store: "steam",
+      count: 1,
+      giveaways: [{ id: "100100", title: "Actually Free Steam Game" }],
+    });
+  });
+
+  it("forwards a user-specified locale and country upstream", async () => {
+    await giveaways.handle(new Request(`${STEAM_URL}?locale=fr-FR&country=FR`));
+
+    const featuredUrl = String(fetchSpy.mock.calls[0]?.[0]);
+    expect(featuredUrl).toContain("cc=FR");
+    expect(featuredUrl).toContain("l=french");
+  });
+
+  it("rejects an invalid locale with 422", async () => {
+    const response = await giveaways.handle(new Request(`${STEAM_URL}?locale=not!valid`));
+
+    expect(response.status).toBe(422);
+  });
+
+  it("rejects an invalid country with 422", async () => {
+    const response = await giveaways.handle(new Request(`${STEAM_URL}?country=FRA`));
+
+    expect(response.status).toBe(422);
+  });
+
+  it("returns 502 with a stable error body when upstream fails", async () => {
+    fetchSpy.mockRejectedValue(new Error("network down"));
+
+    const response = await giveaways.handle(new Request(STEAM_URL));
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      error: "Failed to fetch giveaways from steam",
     });
   });
 });

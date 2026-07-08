@@ -1,7 +1,7 @@
 # Claim API
 
 The HTTP API for [Claim](../../README.md) — a small, read-only JSON API that serves free
-game giveaways aggregated across storefronts (Epic Games, Amazon Prime Gaming today).
+game giveaways aggregated across storefronts (Epic Games, Amazon Prime Gaming, GOG, and Steam today).
 
 Built with **Bun**, **Elysia**, **TypeBox**, and **pino**.
 

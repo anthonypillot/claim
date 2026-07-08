@@ -8,12 +8,14 @@ import {
   GiveawaysQuerySchema,
   GogGiveawaysResponseSchema,
   PrimeGamingGiveawaysResponseSchema,
+  SteamGiveawaysResponseSchema,
 } from "./model.ts";
 import {
   getAllFreeGames,
   getEpicGamesFreeGames,
   getGogFreeGames,
   getPrimeGamingFreeGames,
+  getSteamFreeGames,
 } from "./service.ts";
 import { UpstreamError } from "./stores/shared.ts";
 
@@ -44,4 +46,9 @@ export const giveaways = new Elysia({ prefix: "/giveaways" })
     query: GiveawaysQuerySchema,
     response: { 200: GogGiveawaysResponseSchema, 502: ErrorResponseSchema },
     detail: { summary: "List currently-free GOG giveaways", tags: ["giveaways"] },
+  })
+  .get("/steam", ({ query }) => getSteamFreeGames(query), {
+    query: GiveawaysQuerySchema,
+    response: { 200: SteamGiveawaysResponseSchema, 502: ErrorResponseSchema },
+    detail: { summary: "List currently-free Steam giveaways", tags: ["giveaways"] },
   });
