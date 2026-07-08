@@ -1,11 +1,11 @@
 // Hand-written types for the Prime Gaming offers payload (Luna GraphQL) — only the fields we
 // read, optional-heavy because upstream guarantees none of the nesting.
 
-export interface PrimeMedia {
+export type PrimeMedia = {
   defaultMedia?: { src1x?: string } | null;
-}
+};
 
-export interface PrimeItem {
+export type PrimeItem = {
   id: string;
   isFGWP?: boolean;
   category?: string;
@@ -18,9 +18,9 @@ export interface PrimeItem {
   };
   offers?: { startTime?: string | null; endTime?: string | null }[] | null;
   game?: { assets?: { title?: string; publisher?: string | null } | null } | null;
-}
+};
 
-export interface PrimeFreeGamesResponse {
+export type PrimeFreeGamesResponse = {
   data?: { games?: { items?: PrimeItem[] } };
   errors?: { message?: string }[] | null;
-}
+};

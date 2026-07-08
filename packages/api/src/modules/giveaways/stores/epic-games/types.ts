@@ -1,7 +1,7 @@
 // Hand-written types for the Epic freeGamesPromotions payload — only the fields we read,
 // optional-heavy because upstream guarantees none of the nesting.
 
-export interface EpicOffer {
+export type EpicOffer = {
   id: string;
   title: string;
   description: string;
@@ -23,8 +23,8 @@ export interface EpicOffer {
     promotionalOffers?: { promotionalOffers?: { startDate: string; endDate: string }[] }[];
     upcomingPromotionalOffers?: { promotionalOffers?: { startDate: string; endDate: string }[] }[];
   } | null;
-}
+};
 
-export interface EpicFreeGamesResponse {
+export type EpicFreeGamesResponse = {
   data?: { Catalog?: { searchStore?: { elements?: EpicOffer[] } } };
-}
+};
