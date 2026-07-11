@@ -1,0 +1,35 @@
+# dependencies
+node_modules
+**/node_modules
+
+# build output
+build
+**/build
+out
+dist
+*.tgz
+
+# coverage and logs
+coverage
+**/coverage
+*.lcov
+logs
+*.log
+report.[0-9]*.json
+
+# local configuration
+.env*
+.cache
+.eslintcache
+*.tsbuildinfo
+
+# repository and documentation
+.git
+.github
+docs
+.idea
+.DS_Store
+
+# source used only by tests
+**/*.test.ts
+**/fixtures.ts

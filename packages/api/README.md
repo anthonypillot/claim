@@ -25,6 +25,14 @@ bun run build          # production bundle → build/index.js
 bun run start          # run the bundle (NODE_ENV=production)
 ```
 
+## Docker
+
+Build from the repository root so Bun can install the complete workspace:
+
+```bash
+docker build --file packages/api/Dockerfile --tag claim-api .
+```
+
 ## Database
 
 `GET /giveaways*` is a **read-through cache** over Postgres: on a miss it fetches live, writes the result to the
