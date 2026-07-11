@@ -67,13 +67,8 @@ export const SteamGiveawaysResponseSchema = createGiveawaysResponseSchema("steam
 export const STORE_IDS = ["epic-games", "prime-gaming", "gog", "steam"] as const;
 export type StoreId = (typeof STORE_IDS)[number];
 
-/** (locale, country) markets the refresh job populates into the cache. Extend this to cache more markets. */
-export const REFRESH_LOCALES = [
-  { locale: "en-US", country: "US" },
-  { locale: "en-GB", country: "GB" },
-  { locale: "fr-FR", country: "FR" },
-  { locale: "de-DE", country: "DE" },
-] as const satisfies readonly { locale: string; country: string }[];
+/** How long a cached market/store stays fresh before a read re-fetches it from upstream. */
+export const CACHE_TTL_HOURS = 24;
 
 /** A giveaway tagged with its source store; only the aggregate endpoint adds the tag. */
 export const StoreGiveawaySchema = t.Composite([
@@ -93,22 +88,6 @@ export const ErrorResponseSchema = t.Object({
   error: t.String(),
 });
 
-/** Summary returned by the refresh endpoint: what was written per market, and any per-store failures. */
-export const RefreshSummaryResponseSchema = t.Object({
-  startedAt: t.String({ description: "ISO 8601 timestamp when the refresh began" }),
-  finishedAt: t.String({ description: "ISO 8601 timestamp when the refresh completed" }),
-  totalUpserted: t.Integer({ description: "Total rows written across every market" }),
-  markets: t.Array(
-    t.Object({
-      locale: t.String(),
-      country: t.String(),
-      upserted: t.Integer(),
-      stores: t.Array(t.Object({ store: t.UnionEnum(STORE_IDS), count: t.Integer() })),
-      errors: t.Array(t.Object({ store: t.UnionEnum(STORE_IDS), error: t.String() })),
-    }),
-  ),
-});
-
 export type Giveaway = typeof GiveawaySchema.static;
 export type GiveawayImages = typeof GiveawayImagesSchema.static;
 export type StoreGiveaway = typeof StoreGiveawaySchema.static;
@@ -117,4 +96,3 @@ export type PrimeGamingGiveawaysResponse = typeof PrimeGamingGiveawaysResponseSc
 export type GogGiveawaysResponse = typeof GogGiveawaysResponseSchema.static;
 export type SteamGiveawaysResponse = typeof SteamGiveawaysResponseSchema.static;
 export type AllGiveawaysResponse = typeof AllGiveawaysResponseSchema.static;
-export type RefreshSummaryResponse = typeof RefreshSummaryResponseSchema.static;

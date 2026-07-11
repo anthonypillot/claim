@@ -6,16 +6,16 @@ import type {
   Giveaway,
   GogGiveawaysResponse,
   PrimeGamingGiveawaysResponse,
-  RefreshSummaryResponse,
   SteamGiveawaysResponse,
   StoreGiveaway,
   StoreId,
 } from "./model.ts";
-import { REFRESH_LOCALES, STORE_IDS } from "./model.ts";
+import { STORE_IDS } from "./model.ts";
 import {
   findActiveGiveaways,
-  isRefreshed,
-  markStoresRefreshed,
+  isFresh,
+  isMarketFresh,
+  markFetched,
   toGiveaway,
   toStoreGiveaway,
   upsertGiveaways,
@@ -123,103 +123,48 @@ function byStoreThenId(a: StoreGiveaway, b: StoreGiveaway): number {
 }
 
 /**
- * Serves the aggregate from the cache. Active cached rows are returned directly (the hot path, one query);
- * when none are active, a refresh marker disambiguates "refreshed but nothing free right now" (empty result)
- * from "never refreshed" (fall back to a live upstream fetch).
+ * Read-through aggregate cache. When every store was fetched within the TTL, serve the active cached rows
+ * (`free_until > now()`); otherwise fetch live, write the result to the cache, and serve it. Only the stores
+ * that succeeded are cached and marked fresh, so a still-failing store is retried on the next request.
  */
 export async function getAllFreeGamesCached(
   db: Database,
   options: { locale: string; country: string },
 ): Promise<AllGiveawaysResponse> {
-  const rows = await findActiveGiveaways(db, options);
-  if (rows.length > 0) {
-    return {
-      count: rows.length,
-      giveaways: rows.map(toStoreGiveaway).toSorted(byStoreThenId),
-      errors: [],
-    };
+  if (await isMarketFresh(db, options)) {
+    const giveaways = (await findActiveGiveaways(db, options))
+      .map(toStoreGiveaway)
+      .toSorted(byStoreThenId);
+    return { count: giveaways.length, giveaways, errors: [] };
   }
-  if (await isRefreshed(db, options)) return { count: 0, giveaways: [], errors: [] };
-  return getAllFreeGames(options);
+
+  const result = await getAllFreeGames(options);
+  await upsertGiveaways(db, options, result.giveaways);
+  const succeeded = STORE_IDS.filter(
+    (store) => !result.errors.some((entry) => entry.store === store),
+  );
+  await markFetched(db, options, succeeded);
+  return result;
 }
 
-/** Per-store equivalent of {@link getAllFreeGamesCached}; only a never-refreshed store falls back to live. */
+/** Read-through per-store cache; a stale/uncached store is fetched live, written, and served. */
 export async function getStoreFreeGamesCached<Store extends StoreId>(
   db: Database,
   store: Store,
   options: { locale: string; country: string },
 ): Promise<{ store: Store; count: number; giveaways: Giveaway[] }> {
-  const rows = await findActiveGiveaways(db, { ...options, store });
-  if (rows.length > 0) {
+  if (await isFresh(db, { ...options, store })) {
+    const rows = await findActiveGiveaways(db, { ...options, store });
     const giveaways = rows.map(toGiveaway).toSorted((a, b) => a.id.localeCompare(b.id));
     return { store, count: giveaways.length, giveaways };
   }
-  if (await isRefreshed(db, { ...options, store })) return { store, count: 0, giveaways: [] };
+
   const giveaways = await storeFetchers[store](options);
+  await upsertGiveaways(
+    db,
+    options,
+    giveaways.map((giveaway) => ({ ...giveaway, store })),
+  );
+  await markFetched(db, options, [store]);
   return { store, count: giveaways.length, giveaways };
-}
-
-/** Successful stores (those not in `errors`) with their giveaway counts, in store-declaration order. */
-function countsByStore(result: AllGiveawaysResponse): { store: StoreId; count: number }[] {
-  const errored = new Set(result.errors.map((entry) => entry.store));
-  const counts = new Map<StoreId, number>();
-  for (const giveaway of result.giveaways) {
-    counts.set(giveaway.store, (counts.get(giveaway.store) ?? 0) + 1);
-  }
-  return STORE_IDS.filter((store) => !errored.has(store)).map((store) => ({
-    store,
-    count: counts.get(store) ?? 0,
-  }));
-}
-
-/**
- * Refreshes the cache for every market in {@link REFRESH_LOCALES}: fetches live giveaways, upserts them, and
- * records which stores were refreshed. Upstream and database failures are handled differently on purpose:
- *
- * - An all-stores-upstream failure for one market is recorded in that market's `errors` and skipped — it is
- *   expected/transient and never wipes existing rows (upsert-only, no deletes).
- * - A database write failure is infrastructure-level: it propagates so the caller returns a non-2xx status,
- *   rather than being silently mislabeled as an upstream failure behind a 200.
- *
- * This is the non-HTTP entry point for the cron route.
- */
-export async function refreshCache(db: Database): Promise<RefreshSummaryResponse> {
-  const startedAt = new Date().toISOString();
-  const markets: RefreshSummaryResponse["markets"] = [];
-  let totalUpserted = 0;
-
-  for (const { locale, country } of REFRESH_LOCALES) {
-    let result: AllGiveawaysResponse;
-    try {
-      result = await getAllFreeGames({ locale, country });
-    } catch (error) {
-      // getAllFreeGames throws only when every store failed upstream for this market; record and move on.
-      logger.error({ locale, country, err: error }, "cache refresh: all stores failed upstream");
-      markets.push({
-        locale,
-        country,
-        upserted: 0,
-        stores: [],
-        errors: STORE_IDS.map((store) => ({
-          store,
-          error: `Failed to fetch giveaways from ${store}`,
-        })),
-      });
-      continue;
-    }
-
-    // A DB write failure below is intentionally NOT caught — it must surface as a non-2xx, not be attributed
-    // to the (successful) upstreams.
-    const stores = countsByStore(result);
-    const upserted = await upsertGiveaways(db, { locale, country }, result.giveaways);
-    await markStoresRefreshed(
-      db,
-      { locale, country },
-      stores.map((entry) => entry.store),
-    );
-    totalUpserted += upserted;
-    markets.push({ locale, country, upserted, stores, errors: result.errors });
-  }
-
-  return { startedAt, finishedAt: new Date().toISOString(), totalUpserted, markets };
 }

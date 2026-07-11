@@ -1,18 +1,17 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 
+import { eq, sql } from "drizzle-orm";
+
 import { createTestDatabase } from "../../database/testing.ts";
 import { createGiveaways } from "./index.ts";
 import {
   type AllGiveawaysResponse,
-  REFRESH_LOCALES,
-  type RefreshSummaryResponse,
+  CACHE_TTL_HOURS,
+  STORE_IDS,
   type StoreGiveaway,
 } from "./model.ts";
-import { markStoresRefreshed, upsertGiveaways } from "./repository.ts";
-import {
-  giveawayRefreshes as giveawayRefreshesTable,
-  giveaways as giveawaysTable,
-} from "./schema.ts";
+import { isFresh, markFetched, upsertGiveaways } from "./repository.ts";
+import { giveawayFetches as giveawayFetchesTable, giveaways as giveawaysTable } from "./schema.ts";
 import { epicFreeGamesFixture } from "./stores/epic-games/fixtures.ts";
 import { gogGiveawaySectionFixtures, gogSectionsFixture } from "./stores/gog/fixtures.ts";
 import { primeFreeGamesFixture, primeHomeHtmlFixture } from "./stores/prime-gaming/fixtures.ts";
@@ -23,7 +22,8 @@ const EPIC_URL = "http://localhost/giveaways/epic-games";
 const PRIME_URL = "http://localhost/giveaways/prime-gaming";
 const GOG_URL = "http://localhost/giveaways/gog";
 const STEAM_URL = "http://localhost/giveaways/steam";
-const REFRESH_URL = "http://localhost/giveaways/refresh";
+
+const MARKET_US = { locale: "en-US", country: "US" };
 
 let db: Awaited<ReturnType<typeof createTestDatabase>>;
 let app: ReturnType<typeof createGiveaways>;
@@ -91,7 +91,7 @@ beforeEach(async () => {
   // Reset to a cold (empty, never-refreshed) cache so the read routes exercise the live-upstream fallback
   // by default. Both the rows and the refresh markers must be cleared.
   await db.delete(giveawaysTable);
-  await db.delete(giveawayRefreshesTable);
+  await db.delete(giveawayFetchesTable);
   // Cast: the stub doesn't carry fetch's static `preconnect` property.
   fetchSpy = spyOn(globalThis, "fetch").mockImplementation(stubUpstreamFetch as typeof fetch);
 });
@@ -205,9 +205,23 @@ describe("GET /giveaways (cold cache → live fallback)", () => {
   });
 });
 
-describe("GET /giveaways (warm cache)", () => {
-  it("serves active giveaways from the database without hitting upstreams", async () => {
-    await upsertGiveaways(db, { locale: "en-US", country: "US" }, [cachedSteamGiveaway()]);
+describe("GET /giveaways (read-through cache)", () => {
+  it("caches the aggregate on the first read and serves the second from the DB", async () => {
+    const first = await app.handle(new Request(ALL_URL));
+    expect(first.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalled(); // miss → live fetch + write
+
+    const callsAfterFirst = fetchSpy.mock.calls.length;
+    const second = await app.handle(new Request(ALL_URL));
+
+    expect(second.status).toBe(200);
+    expect(((await second.json()) as AllGiveawaysResponse).count).toBe(4);
+    expect(fetchSpy.mock.calls.length).toBe(callsAfterFirst); // served from cache, no re-fetch
+  });
+
+  it("serves active cached rows once every store is fresh, without hitting upstreams", async () => {
+    await upsertGiveaways(db, MARKET_US, [cachedSteamGiveaway()]);
+    await markFetched(db, MARKET_US, [...STORE_IDS]);
     fetchSpy.mockClear();
 
     const response = await app.handle(new Request(ALL_URL));
@@ -223,9 +237,9 @@ describe("GET /giveaways (warm cache)", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("serves empty from a refreshed market with no active giveaways, without a live re-fetch", async () => {
-    await markStoresRefreshed(db, { locale: "en-US", country: "US" }, ["steam"]);
-    await upsertGiveaways(db, { locale: "en-US", country: "US" }, [
+  it("serves empty (no re-fetch) when the market is fresh but nothing is active", async () => {
+    await markFetched(db, MARKET_US, [...STORE_IDS]);
+    await upsertGiveaways(db, MARKET_US, [
       {
         ...cachedSteamGiveaway(),
         id: "expired",
@@ -241,10 +255,56 @@ describe("GET /giveaways (warm cache)", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("serves empty from cache for a refreshed-but-empty store, without hitting the upstream", async () => {
-    // Regression: a store refreshed with zero giveaways (e.g. Steam with no promo) must NOT be treated as
-    // never-refreshed — otherwise every request live-fetches and 502s when the upstream is down.
-    await markStoresRefreshed(db, { locale: "en-US", country: "US" }, ["steam"]);
+  it("re-fetches when a store's cache has passed the TTL", async () => {
+    await upsertGiveaways(db, MARKET_US, [cachedSteamGiveaway()]);
+    await markFetched(db, MARKET_US, [...STORE_IDS]);
+    // Age one store's marker past the TTL → the market is no longer all-fresh → miss.
+    await db
+      .update(giveawayFetchesTable)
+      .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` })
+      .where(eq(giveawayFetchesTable.store, "gog"));
+    fetchSpy.mockClear();
+
+    const response = await app.handle(new Request(ALL_URL));
+
+    expect(response.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalled();
+  });
+
+  it("caches only the stores that succeeded on a partial-failure read", async () => {
+    fetchSpy.mockImplementation(((input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("epicgames.com")) return Promise.reject(new Error("network down"));
+      return stubUpstreamFetch(input);
+    }) as typeof fetch);
+
+    const response = await app.handle(new Request(ALL_URL));
+
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as AllGiveawaysResponse).errors).toEqual([
+      { store: "epic-games", error: "Failed to fetch giveaways from epic-games" },
+    ]);
+    // The failed store was not cached (stays not-fresh, retried next time); the others are.
+    expect(await isFresh(db, { ...MARKET_US, store: "epic-games" })).toBe(false);
+    expect(await isFresh(db, { ...MARKET_US, store: "gog" })).toBe(true);
+  });
+
+  it("caches a per-store read and serves the second from the DB", async () => {
+    const first = await app.handle(new Request(GOG_URL));
+    expect(first.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalled();
+
+    const callsAfterFirst = fetchSpy.mock.calls.length;
+    const second = await app.handle(new Request(GOG_URL));
+
+    expect(second.status).toBe(200);
+    expect(await second.json()).toMatchObject({ store: "gog", count: 1 });
+    expect(fetchSpy.mock.calls.length).toBe(callsAfterFirst);
+  });
+
+  it("serves empty from cache for a fetched-but-empty store, without hitting the upstream", async () => {
+    // A store fetched with zero giveaways (e.g. Steam with no promo) is served empty from cache, not re-fetched.
+    await markFetched(db, MARKET_US, ["steam"]);
     fetchSpy.mockClear();
 
     const response = await app.handle(new Request(STEAM_URL));
@@ -252,15 +312,6 @@ describe("GET /giveaways (warm cache)", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ store: "steam", count: 0, giveaways: [] });
     expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("still falls back to a live fetch for a genuinely never-refreshed store", async () => {
-    // No marker for gog → cold → live upstream fetch (proves the marker, not row-count, gates fallback).
-    const response = await app.handle(new Request(GOG_URL));
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ store: "gog", count: 1 });
-    expect(fetchSpy).toHaveBeenCalled();
   });
 });
 
@@ -421,8 +472,9 @@ describe("GET /giveaways/steam", () => {
     expect(response.status).toBe(422);
   });
 
-  it("serves from the cache once populated", async () => {
-    await upsertGiveaways(db, { locale: "en-US", country: "US" }, [cachedSteamGiveaway()]);
+  it("serves from the cache once fresh", async () => {
+    await upsertGiveaways(db, MARKET_US, [cachedSteamGiveaway()]);
+    await markFetched(db, MARKET_US, ["steam"]);
     fetchSpy.mockClear();
 
     const response = await app.handle(new Request(STEAM_URL));
@@ -445,96 +497,5 @@ describe("GET /giveaways/steam", () => {
     expect(await response.json()).toEqual({
       error: "Failed to fetch giveaways from steam",
     });
-  });
-});
-
-describe("POST /giveaways/refresh", () => {
-  const originalToken = process.env["REFRESH_TOKEN"];
-
-  beforeEach(() => {
-    process.env["REFRESH_TOKEN"] = "test-token";
-  });
-
-  afterEach(() => {
-    if (originalToken === undefined) delete process.env["REFRESH_TOKEN"];
-    else process.env["REFRESH_TOKEN"] = originalToken;
-  });
-
-  it("rejects a missing token with 401 and does not hit upstreams", async () => {
-    const response = await app.handle(new Request(REFRESH_URL, { method: "POST" }));
-
-    expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ error: "Unauthorized" });
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("rejects a wrong token with 401", async () => {
-    const response = await app.handle(
-      new Request(REFRESH_URL, { method: "POST", headers: { "x-refresh-token": "wrong" } }),
-    );
-
-    expect(response.status).toBe(401);
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("refreshes every market with a valid token, then serves from the warmed cache", async () => {
-    const response = await app.handle(
-      new Request(REFRESH_URL, { method: "POST", headers: { "x-refresh-token": "test-token" } }),
-    );
-
-    expect(response.status).toBe(200);
-    const summary = (await response.json()) as RefreshSummaryResponse;
-    expect(summary.markets).toHaveLength(REFRESH_LOCALES.length);
-    // Each market fetches all four stores, one giveaway each from the fixtures.
-    expect(summary.totalUpserted).toBe(REFRESH_LOCALES.length * 4);
-
-    // A subsequent read for a warmed market is served from the DB, with no further upstream calls.
-    fetchSpy.mockClear();
-    const read = await app.handle(new Request(ALL_URL));
-    expect(read.status).toBe(200);
-    expect(((await read.json()) as AllGiveawaysResponse).count).toBe(4);
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("records a market's failure without wiping existing cached rows", async () => {
-    await upsertGiveaways(db, { locale: "en-US", country: "US" }, [cachedSteamGiveaway()]);
-    fetchSpy.mockRejectedValue(new Error("network down"));
-
-    const response = await app.handle(
-      new Request(REFRESH_URL, { method: "POST", headers: { "x-refresh-token": "test-token" } }),
-    );
-
-    expect(response.status).toBe(200);
-    const summary = (await response.json()) as RefreshSummaryResponse;
-    expect(summary.totalUpserted).toBe(0);
-    expect(summary.markets[0]?.errors.length).toBeGreaterThan(0);
-
-    // The previously cached row survived the failed refresh (upsert-only, no deletes).
-    fetchSpy.mockClear();
-    const read = await app.handle(new Request(ALL_URL));
-    expect(((await read.json()) as AllGiveawaysResponse).count).toBe(1);
-  });
-
-  it("surfaces a database write failure as a non-2xx instead of a silent 200", async () => {
-    // Upstream fetches succeed (stubbed); only the DB write fails. The endpoint must NOT report a clean 200
-    // that mislabels the failure as an upstream error — a cron keying on non-2xx has to learn the DB is down.
-    const brokenDb = new Proxy(db, {
-      get(target, prop, receiver) {
-        if (prop === "insert") {
-          return () => {
-            throw new Error("simulated database outage");
-          };
-        }
-        const value = Reflect.get(target, prop, receiver);
-        return typeof value === "function" ? value.bind(target) : value;
-      },
-    }) as typeof db;
-    const brokenApp = createGiveaways(() => brokenDb);
-
-    const response = await brokenApp.handle(
-      new Request(REFRESH_URL, { method: "POST", headers: { "x-refresh-token": "test-token" } }),
-    );
-
-    expect(response.status).toBeGreaterThanOrEqual(500);
   });
 });

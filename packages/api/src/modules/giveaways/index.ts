@@ -1,6 +1,5 @@
-import { Elysia, t } from "elysia";
+import { Elysia } from "elysia";
 
-import { requireRefreshToken } from "../../config.ts";
 import type { Database } from "../../database/client.ts";
 import { getDb } from "../../database/client.ts";
 import { logger } from "../../utils/logger.ts";
@@ -11,15 +10,10 @@ import {
   GiveawaysQuerySchema,
   GogGiveawaysResponseSchema,
   PrimeGamingGiveawaysResponseSchema,
-  RefreshSummaryResponseSchema,
   SteamGiveawaysResponseSchema,
 } from "./model.ts";
-import { getAllFreeGamesCached, getStoreFreeGamesCached, refreshCache } from "./service.ts";
+import { getAllFreeGamesCached, getStoreFreeGamesCached } from "./service.ts";
 import { UpstreamError } from "./stores/shared.ts";
-
-const RefreshHeadersSchema = t.Object({
-  "x-refresh-token": t.Optional(t.String({ description: "Shared secret guarding this endpoint" })),
-});
 
 /**
  * The giveaways plugin. `getDatabase` is injected (defaulting to the shared client) so tests can supply an
@@ -66,20 +60,5 @@ export function createGiveaways(getDatabase: () => Database = getDb) {
       query: GiveawaysQuerySchema,
       response: { 200: SteamGiveawaysResponseSchema, 502: ErrorResponseSchema },
       detail: { summary: "List currently-free Steam giveaways", tags: ["giveaways"] },
-    })
-    .post("/refresh", () => refreshCache(getDatabase()), {
-      headers: RefreshHeadersSchema,
-      // Optional header + a manual check keeps the OpenAPI spec clean and returns a consistent 401 for both
-      // a missing and a mismatched token (a required header would yield 422 on absence instead).
-      beforeHandle({ headers, status }) {
-        if (headers["x-refresh-token"] !== requireRefreshToken()) {
-          return status(401, { error: "Unauthorized" });
-        }
-      },
-      response: { 200: RefreshSummaryResponseSchema, 401: ErrorResponseSchema },
-      detail: {
-        summary: "Refresh the giveaways cache from every store (cron-triggered)",
-        tags: ["giveaways"],
-      },
     });
 }

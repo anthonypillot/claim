@@ -12,7 +12,7 @@ From the repo root (preferred — root scripts fan out to the workspace):
 
 ```bash
 bun install
-cp packages/api/.env.example packages/api/.env   # then fill in DATABASE_URL / REFRESH_TOKEN
+cp packages/api/.env.example packages/api/.env   # then fill in DATABASE_URL
 bun run dev      # hot-reload → http://localhost:3000
 ```
 
@@ -27,31 +27,28 @@ bun run start          # run the bundle (NODE_ENV=production, cluster mode)
 
 ## Database
 
-`GET /giveaways*` is served from Postgres. Set `DATABASE_URL` (and `REFRESH_TOKEN`, which guards the refresh
-endpoint) before running the server or migrations. A cold/empty cache falls back to a live upstream fetch, so
-the API works before the first refresh.
+`GET /giveaways*` is a **read-through cache** over Postgres: on a miss it fetches live, writes the result to the
+DB, and serves it; subsequent reads within the TTL (`CACHE_TTL_HOURS`, 24h) are served from the DB. Set
+`DATABASE_URL` before running the server or migrations.
 
 Spin up a local Postgres and apply the schema:
 
 ```bash
 docker run --rm -e POSTGRES_PASSWORD=claim -p 5432:5432 postgres:17
 export DATABASE_URL=postgres://postgres:claim@localhost:5432/postgres
-export REFRESH_TOKEN=dev-secret
 
 bun run db:migrate     # apply committed migrations (run from packages/api)
 ```
 
-Warm the cache, then read it:
+Then just read — the first call fetches and caches, the next is served from the DB:
 
 ```bash
-curl -X POST -H "x-refresh-token: $REFRESH_TOKEN" localhost:3000/giveaways/refresh
-curl localhost:3000/giveaways
+curl localhost:3000/giveaways          # cold: fetches live + caches
+curl localhost:3000/giveaways          # warm: served from the cache
 ```
 
 Schema changes: edit a feature's `schema.ts` (e.g. `src/modules/giveaways/schema.ts`), then
-`bun run db:generate` to produce a new migration under `src/database/migrations/` and **commit it**. The
-markets that the refresh job caches are the `REFRESH_LOCALES` list in `src/modules/giveaways/model.ts` —
-extend it to cache more locale/country combinations.
+`bun run db:generate` to produce a new migration under `src/database/migrations/` and **commit it**.
 
 > Deploy note: `bun build` bundles JavaScript only, not the `.sql` migration files. Run `bun run db:migrate`
 > from source at deploy time (it reads `src/database/migrations/` relative to the source file); don't try to

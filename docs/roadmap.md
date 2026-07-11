@@ -22,16 +22,16 @@ descriptions, and the details needed to surface or claim each offer.
 
 ### Persistence & caching
 
-Giveaways are cached in **Postgres** (Drizzle ORM) and `GET /giveaways*` is served from the database
-rather than by calling every storefront on each request — faster, and resilient to upstream outages:
+Giveaways are cached in **Postgres** (Drizzle ORM). `GET /giveaways*` is a **read-through cache**: a read
+serves from the database when the data is fresh, and otherwise fetches live, stores the result, and serves it —
+faster on repeat reads and resilient to upstream hiccups:
 
-- **Refresh** — a cron job calls `POST /giveaways/refresh` (guarded by the `REFRESH_TOKEN` header), which
-  fetches every store for each market in `REFRESH_LOCALES` and upserts the results. A store that fails
-  leaves its existing rows intact.
-- **History** — rows are never deleted on expiry, so past giveaways are retained; "currently free" is just
-  the rows still inside their free window.
-- **Cold-cache fallback** — a market that has never been refreshed falls back to a live upstream fetch, so a
-  fresh deploy never returns an empty list.
+- **Read-through with a 24h TTL** — a scope (store × locale × country) fetched within `CACHE_TTL_HOURS` is
+  served from the DB; past that, the next read re-fetches and re-caches. No cron, no separate refresh endpoint.
+- **History** — rows are never deleted on expiry, so past giveaways are retained; "currently free" is just the
+  rows still inside their free window.
+- **Empty stores** — a store fetched with no current giveaway is remembered as fetched, so it's served empty
+  from cache instead of hitting the upstream on every request.
 
 ### More stores
 

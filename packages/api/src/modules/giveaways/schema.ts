@@ -50,17 +50,17 @@ export const giveaways = pgTable(
 export type GiveawayRow = typeof giveaways.$inferSelect;
 export type NewGiveawayRow = typeof giveaways.$inferInsert;
 
-// Records that a (store, locale, country) was successfully refreshed, independent of how many giveaways it
-// produced. This is the authoritative "has this market been refreshed?" signal — a store that is legitimately
-// empty right now still gets a marker, so reads serve an empty list from cache instead of falling back to a
-// live fetch. Row count alone cannot express this (a refreshed-but-empty store has zero giveaway rows).
-export const giveawayRefreshes = pgTable(
-  "giveaway_refreshes",
+// Records when a (store, locale, country) was last fetched from upstream. This is the cache's TTL freshness
+// signal: a scope is "fresh" when its `fetched_at` is within CACHE_TTL_HOURS. Unlike a giveaway-row count it
+// stays meaningful for a store that was fetched but produced zero giveaways, so an empty store is served from
+// cache instead of re-fetched on every request.
+export const giveawayFetches = pgTable(
+  "giveaway_fetches",
   {
     store: text("store").notNull(),
     locale: text("locale").notNull(),
     country: text("country").notNull(),
-    refreshedAt: timestamp("refreshed_at", seenAt).notNull().defaultNow(),
+    fetchedAt: timestamp("fetched_at", seenAt).notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.store, table.locale, table.country] })],
 );

@@ -57,15 +57,16 @@ packages/api/
 ├─ drizzle.config.ts · package.json · tsconfig.json · bunfig.toml · README.md
 ```
 
-## Persistence (cache + history)
+## Persistence (read-through cache)
 
-See [`giveaways-flow.md`](./giveaways-flow.md) for sequence diagrams of the read and refresh paths.
+See [`giveaways-flow.md`](./giveaways-flow.md) for the read-through sequence diagram.
 
-`GET /giveaways*` is served from **Postgres** (Drizzle ORM on Bun's native SQL driver), not from a live
-upstream call per request. A cron-triggered `POST /giveaways/refresh` fetches every store for each market in
-`REFRESH_LOCALES` and **upserts** rows keyed by `(store, id, locale, country)`; rows are never deleted, so the
-table doubles as history and a failed store never wipes the cache. A market that has never been refreshed
-(row count 0) falls back to a live fetch, so a cold cache is never an empty response.
+`GET /giveaways*` is a **read-through cache** over **Postgres** (Drizzle ORM on Bun's native SQL driver). When
+the requested scope is fresh (fetched within `CACHE_TTL_HOURS`, 24h) the active cached rows
+(`free_until > now()`) are served directly; on a miss the read fetches live, **upserts** the result (keyed by
+`(store, id, locale, country)`, never deleted → the table doubles as history), records the fetch time in
+`giveaway_fetches`, and serves it. The `giveaway_fetches` marker is per `(store, locale, country)`, so a store
+fetched with zero giveaways is still "fresh" and served empty rather than re-fetched every request.
 
 `src/database/` holds only shared plumbing — connection, migrations, test factory — the same non-feature role
 as `utils/logger.ts`. Each feature owns its own table: `modules/giveaways/schema.ts` (paralleling `model.ts`)

@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 
+import { sql } from "drizzle-orm";
+
 import { createTestDatabase } from "../../database/testing.ts";
-import type { StoreGiveaway } from "./model.ts";
+import { CACHE_TTL_HOURS, type StoreGiveaway } from "./model.ts";
 import {
   findActiveGiveaways,
   findGiveawayHistory,
-  isRefreshed,
-  markStoresRefreshed,
+  isFresh,
+  isMarketFresh,
+  markFetched,
   toStoreGiveaway,
   upsertGiveaways,
 } from "./repository.ts";
+import { giveawayFetches } from "./schema.ts";
 
 const MARKET = { locale: "en-US", country: "US" };
 
@@ -125,37 +129,58 @@ describe("findActiveGiveaways", () => {
   });
 });
 
-describe("markStoresRefreshed / isRefreshed", () => {
-  it("reports a market as refreshed only after it is marked", async () => {
-    expect(await isRefreshed(db, MARKET)).toBe(false);
+describe("markFetched / isFresh", () => {
+  it("reports a store fresh only after it is marked", async () => {
+    expect(await isFresh(db, { ...MARKET, store: "steam" })).toBe(false);
 
-    await markStoresRefreshed(db, MARKET, ["steam"]);
+    await markFetched(db, MARKET, ["steam"]);
 
-    expect(await isRefreshed(db, MARKET)).toBe(true);
-    expect(await isRefreshed(db, { ...MARKET, store: "steam" })).toBe(true);
+    expect(await isFresh(db, { ...MARKET, store: "steam" })).toBe(true);
   });
 
-  it("marks a refreshed-but-empty store, keeping it distinct from a never-refreshed store", async () => {
-    // No giveaway rows written — only the refresh marker. isRefreshed must still report the store refreshed.
-    await markStoresRefreshed(db, MARKET, ["steam"]);
+  it("marks a fetched-but-empty store fresh, distinct from a never-fetched store", async () => {
+    // No giveaway rows written — only the fetch marker. isFresh must still report the store fresh.
+    await markFetched(db, MARKET, ["steam"]);
 
     expect(await findActiveGiveaways(db, { ...MARKET, store: "steam" })).toHaveLength(0);
-    expect(await isRefreshed(db, { ...MARKET, store: "steam" })).toBe(true);
-    expect(await isRefreshed(db, { ...MARKET, store: "gog" })).toBe(false);
+    expect(await isFresh(db, { ...MARKET, store: "steam" })).toBe(true);
+    expect(await isFresh(db, { ...MARKET, store: "gog" })).toBe(false);
   });
 
-  it("scopes markers by store and market", async () => {
-    await markStoresRefreshed(db, MARKET, ["steam", "gog"]);
+  it("treats a marker older than the TTL as stale", async () => {
+    // Insert a marker fetched just beyond the TTL window.
+    await db.insert(giveawayFetches).values({
+      store: "steam",
+      locale: MARKET.locale,
+      country: MARKET.country,
+      fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'`,
+    });
 
-    expect(await isRefreshed(db, { ...MARKET, store: "epic-games" })).toBe(false);
-    expect(await isRefreshed(db, { locale: "fr-FR", country: "FR" })).toBe(false);
+    expect(await isFresh(db, { ...MARKET, store: "steam" })).toBe(false);
+  });
+
+  it("scopes freshness by store and market", async () => {
+    await markFetched(db, MARKET, ["steam", "gog"]);
+
+    expect(await isFresh(db, { ...MARKET, store: "epic-games" })).toBe(false);
+    expect(await isFresh(db, { locale: "fr-FR", country: "FR", store: "steam" })).toBe(false);
   });
 
   it("is idempotent across repeated marks", async () => {
-    await markStoresRefreshed(db, MARKET, ["steam"]);
-    await markStoresRefreshed(db, MARKET, ["steam"]);
+    await markFetched(db, MARKET, ["steam"]);
+    await markFetched(db, MARKET, ["steam"]);
 
-    expect(await isRefreshed(db, { ...MARKET, store: "steam" })).toBe(true);
+    expect(await isFresh(db, { ...MARKET, store: "steam" })).toBe(true);
+  });
+});
+
+describe("isMarketFresh", () => {
+  it("is true only when every store has been fetched within the TTL", async () => {
+    await markFetched(db, MARKET, ["epic-games", "prime-gaming", "gog"]);
+    expect(await isMarketFresh(db, MARKET)).toBe(false);
+
+    await markFetched(db, MARKET, ["steam"]);
+    expect(await isMarketFresh(db, MARKET)).toBe(true);
   });
 });
 
