@@ -2,7 +2,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "b
 
 import { eq, sql } from "drizzle-orm";
 
-import { createTestDatabase } from "../../database/testing.ts";
+import {
+  giveawayFetches as giveawayFetchesTable,
+  giveaways as giveawaysTable,
+} from "../../db/schema.ts";
+import { createTestDatabase } from "../../db/testing.ts";
 import { createGiveaways } from "./index.ts";
 import {
   type AllGiveawaysResponse,
@@ -11,7 +15,6 @@ import {
   type StoreGiveaway,
 } from "./model.ts";
 import { isFresh, markFetched, upsertGiveaways } from "./repository.ts";
-import { giveawayFetches as giveawayFetchesTable, giveaways as giveawaysTable } from "./schema.ts";
 import { epicFreeGamesFixture } from "./stores/epic-games/fixtures.ts";
 import { gogGiveawaySectionFixtures, gogSectionsFixture } from "./stores/gog/fixtures.ts";
 import { primeFreeGamesFixture, primeHomeHtmlFixture } from "./stores/prime-gaming/fixtures.ts";

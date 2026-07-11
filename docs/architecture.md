@@ -24,8 +24,7 @@ packages/api/
 │  │  │  ├─ index.ts
 │  │  │  ├─ service.ts
 │  │  │  ├─ model.ts            TypeBox API schema
-│  │  │  ├─ schema.ts           Drizzle table — the feature owns its storage
-│  │  │  ├─ repository.ts       cache queries + row↔API mappers
+│  │  │  ├─ repository.ts       cache queries + row↔API mappers (over src/db/schema.ts)
 │  │  │  └─ stores/
 │  │  │     ├─ shared.ts
 │  │  │     ├─ epic-games/
@@ -47,13 +46,13 @@ packages/api/
 │  │     ├─ service.ts
 │  │     ├─ model.ts
 │  │     └─ repository.ts
-│  ├─ database/                SHARED INFRA (peer of utils/) — no feature data
+│  ├─ db/                      SHARED INFRA (peer of utils/) — no feature data
 │  │  ├─ client.ts             lazy getDb() + Database type
-│  │  ├─ migrate.ts            runtime migrator (the db:migrate script)
-│  │  ├─ testing.ts            in-memory PGlite factory for tests
-│  │  └─ migrations/           generated SQL (drizzle-kit)
+│  │  ├─ schema.ts             Drizzle tables (centralized, Drizzle convention)
+│  │  └─ testing.ts            in-memory PGlite factory for tests
 │  └─ utils/
 │     └─ logger.ts
+├─ drizzle/                    generated SQL migrations (drizzle-kit, out: ./drizzle)
 ├─ drizzle.config.ts · package.json · tsconfig.json · bunfig.toml · README.md
 ```
 
@@ -68,9 +67,10 @@ the requested scope is fresh (fetched within `CACHE_TTL_HOURS`, 24h) the active 
 `giveaway_fetches`, and serves it. The `giveaway_fetches` marker is per `(store, locale, country)`, so a store
 fetched with zero giveaways is still "fresh" and served empty rather than re-fetched every request.
 
-`src/database/` holds only shared plumbing — connection, migrations, test factory — the same non-feature role
-as `utils/logger.ts`. Each feature owns its own table: `modules/giveaways/schema.ts` (paralleling `model.ts`)
-plus its `repository.ts`. There is no shared schema barrel; `drizzle.config.ts` globs `./src/modules/**/schema.ts`,
-so a new feature (e.g. `subscriptions/`) adds its own `schema.ts` and drizzle-kit picks it up with no changes to
-the shared layer. `drizzle-kit` (SQL generation) and `@electric-sql/pglite` (test database) are dev-only and
-excluded from the production bundle, like `pino-pretty`.
+`src/db/` holds only shared plumbing — connection and test factory — the same non-feature role as
+`utils/logger.ts`. Following Drizzle's default layout, table definitions are centralized in `src/db/schema.ts`
+and migrations are generated into `./drizzle` (`drizzle.config.ts` sets `schema: "./src/db/schema.ts"`,
+`out: "./drizzle"`); a new feature (e.g. `subscriptions/`) adds its table to `src/db/schema.ts` while keeping its
+own `repository.ts` + `model.ts` in its module. Migrations are applied with the `drizzle-kit migrate` CLI
+(`db:migrate`), so there is no hand-written runtime migrator. `drizzle-kit` (SQL generation + migrate) and
+`@electric-sql/pglite` (test database) are dev-only and excluded from the production bundle, like `pino-pretty`.

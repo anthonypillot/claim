@@ -6,5 +6,5 @@
   "semi": true,
   "singleQuote": false,
   "trailingComma": "all",
-  "ignorePatterns": ["**/database/migrations/**"]
+  "ignorePatterns": ["**/drizzle/**"]
 }

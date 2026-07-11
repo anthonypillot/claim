@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
 
-import type { Database } from "../../database/client.ts";
-import { getDb } from "../../database/client.ts";
+import type { Database } from "../../db/client.ts";
+import { getDb } from "../../db/client.ts";
 import { logger } from "../../utils/logger.ts";
 import {
   AllGiveawaysResponseSchema,

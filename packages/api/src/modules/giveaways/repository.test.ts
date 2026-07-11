@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from "bun:test";
 
 import { sql } from "drizzle-orm";
 
-import { createTestDatabase } from "../../database/testing.ts";
+import { giveawayFetches } from "../../db/schema.ts";
+import { createTestDatabase } from "../../db/testing.ts";
 import { CACHE_TTL_HOURS, type StoreGiveaway } from "./model.ts";
 import {
   findActiveGiveaways,
@@ -13,7 +14,6 @@ import {
   toStoreGiveaway,
   upsertGiveaways,
 } from "./repository.ts";
-import { giveawayFetches } from "./schema.ts";
 
 const MARKET = { locale: "en-US", country: "US" };
 
