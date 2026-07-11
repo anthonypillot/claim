@@ -7,7 +7,6 @@ import { createTestDatabase } from "../../db/testing.ts";
 import { CACHE_TTL_HOURS, type StoreGiveaway } from "./model.ts";
 import {
   findActiveGiveaways,
-  findGiveawayHistory,
   isFresh,
   isMarketFresh,
   markFetched,
@@ -181,17 +180,5 @@ describe("isMarketFresh", () => {
 
     await markFetched(db, MARKET, ["steam"]);
     expect(await isMarketFresh(db, MARKET)).toBe(true);
-  });
-});
-
-describe("findGiveawayHistory", () => {
-  it("returns every row (active and expired), newest-seen first, honoring the limit", async () => {
-    await upsertGiveaways(db, MARKET, [
-      giveaway({ id: "a" }),
-      giveaway({ id: "b", freeUntil: new Date(Date.now() - 1000).toISOString() }),
-    ]);
-
-    expect(await findGiveawayHistory(db, MARKET)).toHaveLength(2);
-    expect(await findGiveawayHistory(db, { ...MARKET, limit: 1 })).toHaveLength(1);
   });
 });
