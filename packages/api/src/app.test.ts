@@ -3,6 +3,11 @@ import { describe, expect, it } from "bun:test";
 import { buildApp, formatApiName } from "./app.ts";
 
 const ROOT_URL = "http://localhost/";
+const TEST_METADATA = {
+  name: "claim",
+  version: "1.2.3",
+  description: "Test description",
+};
 
 describe("formatApiName", () => {
   it("capitalizes the first letter and appends ' API'", () => {
@@ -16,11 +21,7 @@ describe("formatApiName", () => {
 
 describe("GET /", () => {
   it("returns the API metadata with a formatted name", async () => {
-    const app = buildApp({
-      name: "claim",
-      version: "1.2.3",
-      description: "Test description",
-    });
+    const app = buildApp(TEST_METADATA);
 
     const response = await app.handle(new Request(ROOT_URL));
 
@@ -30,5 +31,59 @@ describe("GET /", () => {
       version: "1.2.3",
       description: "Test description",
     });
+  });
+});
+
+describe("health probes", () => {
+  it("reports liveness without checking dependencies", async () => {
+    let readinessChecks = 0;
+    const app = buildApp(TEST_METADATA, {
+      async checkReadiness() {
+        readinessChecks += 1;
+        throw new Error("Database unavailable");
+      },
+    });
+
+    const response = await app.handle(new Request(`${ROOT_URL}health`));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "ok" });
+    expect(readinessChecks).toBe(0);
+  });
+
+  it("reports readiness when the database check succeeds", async () => {
+    const app = buildApp(TEST_METADATA, { checkReadiness: async () => {} });
+
+    const response = await app.handle(new Request(`${ROOT_URL}ready`));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "ready" });
+  });
+
+  it("reports unavailable when the database check fails", async () => {
+    const app = buildApp(TEST_METADATA, {
+      checkReadiness: async () => {
+        throw new Error("Database unavailable");
+      },
+    });
+
+    const response = await app.handle(new Request(`${ROOT_URL}ready`));
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ status: "not_ready" });
+  });
+
+  it("documents both probes in OpenAPI", async () => {
+    const app = buildApp(TEST_METADATA);
+
+    const response = await app.handle(new Request(`${ROOT_URL}openapi/json`));
+    const spec = (await response.json()) as {
+      paths?: Record<string, { get?: { responses?: Record<string, unknown> } }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(spec.paths?.["/health"]?.get?.responses?.["200"]).toBeDefined();
+    expect(spec.paths?.["/ready"]?.get?.responses?.["200"]).toBeDefined();
+    expect(spec.paths?.["/ready"]?.get?.responses?.["503"]).toBeDefined();
   });
 });
