@@ -1,6 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 
-import { giveaways } from "./index.ts";
+import { createTestDatabase } from "../../database/testing.ts";
+import { createGiveaways } from "./index.ts";
+import {
+  type AllGiveawaysResponse,
+  REFRESH_LOCALES,
+  type RefreshSummaryResponse,
+  type StoreGiveaway,
+} from "./model.ts";
+import { markStoresRefreshed, upsertGiveaways } from "./repository.ts";
+import {
+  giveawayRefreshes as giveawayRefreshesTable,
+  giveaways as giveawaysTable,
+} from "./schema.ts";
 import { epicFreeGamesFixture } from "./stores/epic-games/fixtures.ts";
 import { gogGiveawaySectionFixtures, gogSectionsFixture } from "./stores/gog/fixtures.ts";
 import { primeFreeGamesFixture, primeHomeHtmlFixture } from "./stores/prime-gaming/fixtures.ts";
@@ -11,7 +23,10 @@ const EPIC_URL = "http://localhost/giveaways/epic-games";
 const PRIME_URL = "http://localhost/giveaways/prime-gaming";
 const GOG_URL = "http://localhost/giveaways/gog";
 const STEAM_URL = "http://localhost/giveaways/steam";
+const REFRESH_URL = "http://localhost/giveaways/refresh";
 
+let db: Awaited<ReturnType<typeof createTestDatabase>>;
+let app: ReturnType<typeof createGiveaways>;
 let fetchSpy: ReturnType<typeof spyOn<typeof globalThis, "fetch">>;
 
 // One stub for every upstream a route may hit: Epic's promotions endpoint, GOG's two-step
@@ -52,7 +67,31 @@ async function stubUpstreamFetch(input: string | URL | Request): Promise<Respons
   });
 }
 
-beforeEach(() => {
+/** A minimal cached giveaway for seeding warm-cache assertions. */
+function cachedSteamGiveaway(): StoreGiveaway {
+  return {
+    store: "steam",
+    id: "100100",
+    title: "Cached Steam Game",
+    description: "",
+    url: null,
+    images: { wide: null, tall: null, thumbnail: null },
+    seller: "Steam",
+    price: null,
+    freeUntil: new Date(Date.now() + 86_400_000).toISOString(),
+  };
+}
+
+beforeAll(async () => {
+  db = await createTestDatabase();
+  app = createGiveaways(() => db);
+});
+
+beforeEach(async () => {
+  // Reset to a cold (empty, never-refreshed) cache so the read routes exercise the live-upstream fallback
+  // by default. Both the rows and the refresh markers must be cleared.
+  await db.delete(giveawaysTable);
+  await db.delete(giveawayRefreshesTable);
   // Cast: the stub doesn't carry fetch's static `preconnect` property.
   fetchSpy = spyOn(globalThis, "fetch").mockImplementation(stubUpstreamFetch as typeof fetch);
 });
@@ -61,9 +100,9 @@ afterEach(() => {
   fetchSpy.mockRestore();
 });
 
-describe("GET /giveaways", () => {
+describe("GET /giveaways (cold cache → live fallback)", () => {
   it("merges every store's giveaways in store-declaration order", async () => {
-    const response = await giveaways.handle(new Request(ALL_URL));
+    const response = await app.handle(new Request(ALL_URL));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
@@ -85,7 +124,7 @@ describe("GET /giveaways", () => {
       return stubUpstreamFetch(input);
     }) as typeof fetch);
 
-    const response = await giveaways.handle(new Request(ALL_URL));
+    const response = await app.handle(new Request(ALL_URL));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -106,7 +145,7 @@ describe("GET /giveaways", () => {
       return stubUpstreamFetch(input);
     }) as typeof fetch);
 
-    const response = await giveaways.handle(new Request(ALL_URL));
+    const response = await app.handle(new Request(ALL_URL));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -123,7 +162,7 @@ describe("GET /giveaways", () => {
   it("returns 502 with a stable error body when every store fails", async () => {
     fetchSpy.mockRejectedValue(new Error("network down"));
 
-    const response = await giveaways.handle(new Request(ALL_URL));
+    const response = await app.handle(new Request(ALL_URL));
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({
@@ -132,7 +171,7 @@ describe("GET /giveaways", () => {
   });
 
   it("forwards locale and country to every store", async () => {
-    await giveaways.handle(new Request(`${ALL_URL}?locale=fr-FR&country=FR`));
+    await app.handle(new Request(`${ALL_URL}?locale=fr-FR&country=FR`));
 
     const epicCall = fetchSpy.mock.calls.find(([input]) => String(input).includes("epicgames.com"));
     expect(String(epicCall?.[0])).toContain("locale=fr-FR");
@@ -154,21 +193,80 @@ describe("GET /giveaways", () => {
   });
 
   it("rejects an invalid locale with 422", async () => {
-    const response = await giveaways.handle(new Request(`${ALL_URL}?locale=not!valid`));
+    const response = await app.handle(new Request(`${ALL_URL}?locale=not!valid`));
 
     expect(response.status).toBe(422);
   });
 
   it("rejects an invalid country with 422", async () => {
-    const response = await giveaways.handle(new Request(`${ALL_URL}?country=FRA`));
+    const response = await app.handle(new Request(`${ALL_URL}?country=FRA`));
 
     expect(response.status).toBe(422);
   });
 });
 
+describe("GET /giveaways (warm cache)", () => {
+  it("serves active giveaways from the database without hitting upstreams", async () => {
+    await upsertGiveaways(db, { locale: "en-US", country: "US" }, [cachedSteamGiveaway()]);
+    fetchSpy.mockClear();
+
+    const response = await app.handle(new Request(ALL_URL));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      count: 1,
+      giveaways: [
+        expect.objectContaining({ store: "steam", id: "100100", title: "Cached Steam Game" }),
+      ],
+      errors: [],
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("serves empty from a refreshed market with no active giveaways, without a live re-fetch", async () => {
+    await markStoresRefreshed(db, { locale: "en-US", country: "US" }, ["steam"]);
+    await upsertGiveaways(db, { locale: "en-US", country: "US" }, [
+      {
+        ...cachedSteamGiveaway(),
+        id: "expired",
+        freeUntil: new Date(Date.now() - 1000).toISOString(),
+      },
+    ]);
+    fetchSpy.mockClear();
+
+    const response = await app.handle(new Request(ALL_URL));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ count: 0, giveaways: [], errors: [] });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("serves empty from cache for a refreshed-but-empty store, without hitting the upstream", async () => {
+    // Regression: a store refreshed with zero giveaways (e.g. Steam with no promo) must NOT be treated as
+    // never-refreshed — otherwise every request live-fetches and 502s when the upstream is down.
+    await markStoresRefreshed(db, { locale: "en-US", country: "US" }, ["steam"]);
+    fetchSpy.mockClear();
+
+    const response = await app.handle(new Request(STEAM_URL));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ store: "steam", count: 0, giveaways: [] });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("still falls back to a live fetch for a genuinely never-refreshed store", async () => {
+    // No marker for gog → cold → live upstream fetch (proves the marker, not row-count, gates fallback).
+    const response = await app.handle(new Request(GOG_URL));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ store: "gog", count: 1 });
+    expect(fetchSpy).toHaveBeenCalled();
+  });
+});
+
 describe("GET /giveaways/epic-games", () => {
   it("returns the envelope with only currently-free base games", async () => {
-    const response = await giveaways.handle(new Request(EPIC_URL));
+    const response = await app.handle(new Request(EPIC_URL));
 
     expect(response.status).toBe(200);
     const body = await response.json();
@@ -180,7 +278,7 @@ describe("GET /giveaways/epic-games", () => {
   });
 
   it("forwards default locale and country upstream", async () => {
-    await giveaways.handle(new Request(EPIC_URL));
+    await app.handle(new Request(EPIC_URL));
 
     const upstreamUrl = String(fetchSpy.mock.calls[0]?.[0]);
     expect(upstreamUrl).toContain("locale=en-US");
@@ -189,19 +287,19 @@ describe("GET /giveaways/epic-games", () => {
   });
 
   it("forwards a user-specified locale upstream", async () => {
-    await giveaways.handle(new Request(`${EPIC_URL}?locale=fr-FR`));
+    await app.handle(new Request(`${EPIC_URL}?locale=fr-FR`));
 
     expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("locale=fr-FR");
   });
 
   it("rejects an invalid locale with 422", async () => {
-    const response = await giveaways.handle(new Request(`${EPIC_URL}?locale=not!valid`));
+    const response = await app.handle(new Request(`${EPIC_URL}?locale=not!valid`));
 
     expect(response.status).toBe(422);
   });
 
   it("rejects an invalid country with 422", async () => {
-    const response = await giveaways.handle(new Request(`${EPIC_URL}?country=FRA`));
+    const response = await app.handle(new Request(`${EPIC_URL}?country=FRA`));
 
     expect(response.status).toBe(422);
   });
@@ -209,7 +307,7 @@ describe("GET /giveaways/epic-games", () => {
   it("returns 502 with a stable error body when upstream fails", async () => {
     fetchSpy.mockRejectedValue(new Error("network down"));
 
-    const response = await giveaways.handle(new Request(EPIC_URL));
+    const response = await app.handle(new Request(EPIC_URL));
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({
@@ -220,7 +318,7 @@ describe("GET /giveaways/epic-games", () => {
 
 describe("GET /giveaways/prime-gaming", () => {
   it("returns the envelope with only currently-free full games", async () => {
-    const response = await giveaways.handle(new Request(PRIME_URL));
+    const response = await app.handle(new Request(PRIME_URL));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
@@ -231,14 +329,14 @@ describe("GET /giveaways/prime-gaming", () => {
   });
 
   it("forwards a user-specified locale upstream", async () => {
-    await giveaways.handle(new Request(`${PRIME_URL}?locale=fr-FR`));
+    await app.handle(new Request(`${PRIME_URL}?locale=fr-FR`));
 
     const graphqlInit = fetchSpy.mock.calls[1]?.[1];
     expect(new Headers(graphqlInit?.headers).get("prime-gaming-language")).toBe("fr-FR");
   });
 
   it("rejects an invalid locale with 422", async () => {
-    const response = await giveaways.handle(new Request(`${PRIME_URL}?locale=not!valid`));
+    const response = await app.handle(new Request(`${PRIME_URL}?locale=not!valid`));
 
     expect(response.status).toBe(422);
   });
@@ -246,7 +344,7 @@ describe("GET /giveaways/prime-gaming", () => {
   it("returns 502 with a stable error body when upstream fails", async () => {
     fetchSpy.mockRejectedValue(new Error("network down"));
 
-    const response = await giveaways.handle(new Request(PRIME_URL));
+    const response = await app.handle(new Request(PRIME_URL));
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({
@@ -257,7 +355,7 @@ describe("GET /giveaways/prime-gaming", () => {
 
 describe("GET /giveaways/gog", () => {
   it("returns the envelope with only the currently-live giveaway", async () => {
-    const response = await giveaways.handle(new Request(GOG_URL));
+    const response = await app.handle(new Request(GOG_URL));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
@@ -268,13 +366,13 @@ describe("GET /giveaways/gog", () => {
   });
 
   it("forwards a user-specified locale upstream", async () => {
-    await giveaways.handle(new Request(`${GOG_URL}?locale=fr-FR`));
+    await app.handle(new Request(`${GOG_URL}?locale=fr-FR`));
 
     expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("locale=fr-FR");
   });
 
   it("rejects an invalid locale with 422", async () => {
-    const response = await giveaways.handle(new Request(`${GOG_URL}?locale=not!valid`));
+    const response = await app.handle(new Request(`${GOG_URL}?locale=not!valid`));
 
     expect(response.status).toBe(422);
   });
@@ -282,7 +380,7 @@ describe("GET /giveaways/gog", () => {
   it("returns 502 with a stable error body when upstream fails", async () => {
     fetchSpy.mockRejectedValue(new Error("network down"));
 
-    const response = await giveaways.handle(new Request(GOG_URL));
+    const response = await app.handle(new Request(GOG_URL));
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({
@@ -293,7 +391,7 @@ describe("GET /giveaways/gog", () => {
 
 describe("GET /giveaways/steam", () => {
   it("returns the envelope with only the currently-live free-to-keep giveaway", async () => {
-    const response = await giveaways.handle(new Request(STEAM_URL));
+    const response = await app.handle(new Request(STEAM_URL));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
@@ -304,7 +402,7 @@ describe("GET /giveaways/steam", () => {
   });
 
   it("forwards a user-specified locale and country upstream", async () => {
-    await giveaways.handle(new Request(`${STEAM_URL}?locale=fr-FR&country=FR`));
+    await app.handle(new Request(`${STEAM_URL}?locale=fr-FR&country=FR`));
 
     const featuredUrl = String(fetchSpy.mock.calls[0]?.[0]);
     expect(featuredUrl).toContain("cc=FR");
@@ -312,25 +410,131 @@ describe("GET /giveaways/steam", () => {
   });
 
   it("rejects an invalid locale with 422", async () => {
-    const response = await giveaways.handle(new Request(`${STEAM_URL}?locale=not!valid`));
+    const response = await app.handle(new Request(`${STEAM_URL}?locale=not!valid`));
 
     expect(response.status).toBe(422);
   });
 
   it("rejects an invalid country with 422", async () => {
-    const response = await giveaways.handle(new Request(`${STEAM_URL}?country=FRA`));
+    const response = await app.handle(new Request(`${STEAM_URL}?country=FRA`));
 
     expect(response.status).toBe(422);
+  });
+
+  it("serves from the cache once populated", async () => {
+    await upsertGiveaways(db, { locale: "en-US", country: "US" }, [cachedSteamGiveaway()]);
+    fetchSpy.mockClear();
+
+    const response = await app.handle(new Request(STEAM_URL));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      store: "steam",
+      count: 1,
+      giveaways: [{ id: "100100", title: "Cached Steam Game" }],
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("returns 502 with a stable error body when upstream fails", async () => {
     fetchSpy.mockRejectedValue(new Error("network down"));
 
-    const response = await giveaways.handle(new Request(STEAM_URL));
+    const response = await app.handle(new Request(STEAM_URL));
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({
       error: "Failed to fetch giveaways from steam",
     });
+  });
+});
+
+describe("POST /giveaways/refresh", () => {
+  const originalToken = process.env["REFRESH_TOKEN"];
+
+  beforeEach(() => {
+    process.env["REFRESH_TOKEN"] = "test-token";
+  });
+
+  afterEach(() => {
+    if (originalToken === undefined) delete process.env["REFRESH_TOKEN"];
+    else process.env["REFRESH_TOKEN"] = originalToken;
+  });
+
+  it("rejects a missing token with 401 and does not hit upstreams", async () => {
+    const response = await app.handle(new Request(REFRESH_URL, { method: "POST" }));
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "Unauthorized" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a wrong token with 401", async () => {
+    const response = await app.handle(
+      new Request(REFRESH_URL, { method: "POST", headers: { "x-refresh-token": "wrong" } }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("refreshes every market with a valid token, then serves from the warmed cache", async () => {
+    const response = await app.handle(
+      new Request(REFRESH_URL, { method: "POST", headers: { "x-refresh-token": "test-token" } }),
+    );
+
+    expect(response.status).toBe(200);
+    const summary = (await response.json()) as RefreshSummaryResponse;
+    expect(summary.markets).toHaveLength(REFRESH_LOCALES.length);
+    // Each market fetches all four stores, one giveaway each from the fixtures.
+    expect(summary.totalUpserted).toBe(REFRESH_LOCALES.length * 4);
+
+    // A subsequent read for a warmed market is served from the DB, with no further upstream calls.
+    fetchSpy.mockClear();
+    const read = await app.handle(new Request(ALL_URL));
+    expect(read.status).toBe(200);
+    expect(((await read.json()) as AllGiveawaysResponse).count).toBe(4);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("records a market's failure without wiping existing cached rows", async () => {
+    await upsertGiveaways(db, { locale: "en-US", country: "US" }, [cachedSteamGiveaway()]);
+    fetchSpy.mockRejectedValue(new Error("network down"));
+
+    const response = await app.handle(
+      new Request(REFRESH_URL, { method: "POST", headers: { "x-refresh-token": "test-token" } }),
+    );
+
+    expect(response.status).toBe(200);
+    const summary = (await response.json()) as RefreshSummaryResponse;
+    expect(summary.totalUpserted).toBe(0);
+    expect(summary.markets[0]?.errors.length).toBeGreaterThan(0);
+
+    // The previously cached row survived the failed refresh (upsert-only, no deletes).
+    fetchSpy.mockClear();
+    const read = await app.handle(new Request(ALL_URL));
+    expect(((await read.json()) as AllGiveawaysResponse).count).toBe(1);
+  });
+
+  it("surfaces a database write failure as a non-2xx instead of a silent 200", async () => {
+    // Upstream fetches succeed (stubbed); only the DB write fails. The endpoint must NOT report a clean 200
+    // that mislabels the failure as an upstream error — a cron keying on non-2xx has to learn the DB is down.
+    const brokenDb = new Proxy(db, {
+      get(target, prop, receiver) {
+        if (prop === "insert") {
+          return () => {
+            throw new Error("simulated database outage");
+          };
+        }
+        const value = Reflect.get(target, prop, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }) as typeof db;
+    const brokenApp = createGiveaways(() => brokenDb);
+
+    const response = await brokenApp.handle(
+      new Request(REFRESH_URL, { method: "POST", headers: { "x-refresh-token": "test-token" } }),
+    );
+
+    expect(response.status).toBeGreaterThanOrEqual(500);
   });
 });

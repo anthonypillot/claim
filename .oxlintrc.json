@@ -4,5 +4,5 @@
     "correctness": "error",
     "suspicious": "warn"
   },
-  "ignorePatterns": ["**/build/**", "**/coverage/**", "**/fixtures.ts"]
+  "ignorePatterns": ["**/build/**", "**/coverage/**", "**/fixtures.ts", "**/database/migrations/**"]
 }

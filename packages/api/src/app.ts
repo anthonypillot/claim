@@ -2,7 +2,7 @@ import { cors } from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 
-import { giveaways } from "./modules/giveaways/index.ts";
+import { createGiveaways } from "./modules/giveaways/index.ts";
 import { logger } from "./utils/logger.ts";
 
 export type AppMetadata = {
@@ -47,5 +47,5 @@ export function buildApp(metadata: AppMetadata) {
       version: metadata.version,
       description: metadata.description,
     }))
-    .use(giveaways);
+    .use(createGiveaways());
 }

@@ -4,7 +4,7 @@ This file provides guidance to Code Agents when working with code in this reposi
 
 ## What this is
 
-Claim is a small, read-only JSON HTTP API that aggregates free game giveaways across storefronts (Epic Games, Prime Gaming, GOG, and Steam today; GamerPower planned). Bun workspace monorepo (`packages/**`) with one package: `packages/api`, built on **Bun + Elysia + TypeBox**. See `docs/roadmap.md` (feature direction) and `docs/architecture.md` (target file tree).
+Claim is a small, read-only JSON HTTP API that aggregates free game giveaways across storefronts (Epic Games, Prime Gaming, GOG, and Steam today; GamerPower planned). Bun workspace monorepo (`packages/**`) with one package: `packages/api`, built on **Bun + Elysia + TypeBox**, with giveaways cached in **Postgres via Drizzle ORM**. See `docs/roadmap.md` (feature direction) and `docs/architecture.md` (target file tree).
 
 ## Commands
 
@@ -20,7 +20,11 @@ bun run lint             # oxlint   (lint:fix to autofix)
 bun run format           # oxfmt    (format:check in CI style)
 bun run typecheck        # tsc --noEmit
 bun run build            # bundle → packages/api/build/index.js; start runs it with NODE_ENV=production
+bun run db:generate      # drizzle-kit: diff schema.ts files → new SQL in src/database/migrations (commit it)
+bun run db:migrate       # apply committed migrations (needs DATABASE_URL; run from source, not the bundle)
 ```
+
+**Environment**: `PORT` (default 3000), `LOG_LEVEL`, `NODE_ENV`; plus `DATABASE_URL` (Postgres connection, required wherever the DB is used) and `REFRESH_TOKEN` (shared secret for `POST /giveaways/refresh`). Access env through `src/config.ts` helpers (`requireDatabaseUrl` / `requireRefreshToken`), which fail fast at use — never at import — so `buildApp`/tests run without a database.
 
 Single test file (from `packages/api/`): `bun test src/modules/giveaways/index.test.ts` — or filter by name: `bun test --test-name-pattern "returns 502"`.
 
@@ -32,17 +36,20 @@ Note: `src/index.ts` reads `package.json` and `../../package.json` relative to c
 
 The `giveaways` module shows the pattern each feature follows:
 
-- `index.ts` — Elysia plugin (`prefix: "/giveaways"`); registers routes, maps `UpstreamError` → HTTP 502 via `.error()`/`.onError()`. Mounted with `.use(giveaways)` in `src/index.ts`.
-- `service.ts` — non-HTTP entry point to the feature, deliberately kept separate from routing so later features (e.g. the notifications digest) can call it directly.
-- `model.ts` — TypeBox schemas (Elysia's `t`) are the single source of truth: they validate requests (invalid query → 422), generate the OpenAPI spec, and derive static types via `typeof Schema.static`.
+- `index.ts` — exports `createGiveaways(getDatabase = getDb)`, an Elysia plugin factory (`prefix: "/giveaways"`); registers routes, maps `UpstreamError` → HTTP 502 via `.error()`/`.onError()`. Mounted with `.use(createGiveaways())` in `src/app.ts`; the DB accessor is injected so tests pass an in-memory database and is resolved per request (never at construction, keeping `buildApp` IO-free).
+- `service.ts` — non-HTTP entry point to the feature, deliberately kept separate from routing so later features (e.g. the notifications digest) can call it directly. Holds the live fan-out (`getAllFreeGames`), the cache-backed reads (`getAllFreeGamesCached` / `getStoreFreeGamesCached`, which fall back to a live fetch on a cold market), and the cron refresh (`refreshCache`).
+- `model.ts` — TypeBox schemas (Elysia's `t`) are the single source of truth: they validate requests (invalid query → 422), generate the OpenAPI spec, and derive static types via `typeof Schema.static`. Also holds `STORE_IDS` and `REFRESH_LOCALES` (the markets the refresh job caches).
+- `schema.ts` — the Drizzle table (feature-owned storage, parallel to `model.ts`'s API schema). `repository.ts` — the cache queries plus row↔API mappers.
 - `stores/shared.ts` — the per-store contract (`FetchFreeGames`) plus `UpstreamError(store, message)`.
 - `stores/epic-games/` — one folder per upstream: `api.ts` (raw fetch, wraps every failure in `UpstreamError`), `types.ts` (upstream response types), `mapper.ts` (filter + normalize to `Giveaway`), `fixtures.ts` (upstream-shaped test payload with one element per filter branch), `index.ts` (composes api + mapper and asserts the contract with `fetchFreeGames satisfies FetchFreeGames`).
 
 **Adding a store** = new folder under `stores/` implementing `FetchFreeGames` (with the `satisfies` compile-time check), plus a route in the module's `index.ts`, plus its id in `STORE_IDS` (`model.ts`) and its fetcher in `storeFetchers` (`service.ts`) so the aggregate `GET /giveaways` picks it up — the registry's `satisfies` check enforces this at compile time.
 
+**Persistence (cache + history).** `GET /giveaways*` reads from Postgres via `repository.ts`; a cron-triggered `POST /giveaways/refresh` (guarded by the `REFRESH_TOKEN` header) upserts every store × market (`REFRESH_LOCALES`) keyed by `(store, id, locale, country)`. Rows are never deleted, so the table is also the history and a failed store never wipes the cache; a never-populated market falls back to a live fetch. `src/database/` is **shared infrastructure** (client, migrate runner, PGlite test factory) — a peer of `utils/`, not a feature layer; each feature owns its own `schema.ts`, and `drizzle.config.ts` globs `./src/modules/**/schema.ts` (no shared schema barrel). For Drizzle / drizzle-kit syntax, fetch the official docs index at https://orm.drizzle.team/llms.txt (the doc site is a SPA — use `llms.txt` or the raw GitHub MDX, not scraped HTML pages).
+
 ## Testing pattern
 
-Tests use `bun:test`. Outbound HTTP is stubbed with `spyOn(globalThis, "fetch")` returning the co-located fixture; restore it in `afterEach`. Route tests don't start a server — they call the Elysia instance directly: `giveaways.handle(new Request("http://localhost/giveaways/epic-games"))`.
+Tests use `bun:test`. Outbound HTTP is stubbed with `spyOn(globalThis, "fetch")` returning the co-located fixture; restore it in `afterEach`. Route tests don't start a server — they call the Elysia instance directly, injecting an in-memory database: `createGiveaways(() => testDb).handle(new Request("http://localhost/giveaways/epic-games"))`. The DB seam is `createTestDatabase()` (`src/database/testing.ts`), a real PGlite (Postgres-in-WASM) instance with the committed migrations applied — so repository SQL runs for real with no external Postgres and CI stays hermetic. Regenerate + commit migrations (`bun run db:generate`) before running tests after a schema change, or the PGlite migrator replays stale SQL.
 
 ## Conventions
 
@@ -50,4 +57,5 @@ Tests use `bun:test`. Outbound HTTP is stubbed with `spyOn(globalThis, "fetch")`
 - Named function declarations (`function foo() {}`) over arrow-function consts; `satisfies` for conformance to contract types.
 - Formatting via oxfmt (100-col width, double quotes, trailing commas); linting via oxlint (correctness = error, suspicious = warn). `fixtures.ts` files are ignored by lint and coverage.
 - Logging goes through `src/utils/logger.ts` (pino). `pino-pretty` is dev-only and must stay out of the production bundle — it's referenced only via the transport target string.
+- `drizzle-kit` (migration generation) and `@electric-sql/pglite` (test database) are dev-only and must stay out of the production bundle — the same discipline as `pino-pretty`. `drizzle-kit` is used only by `drizzle.config.ts` + `db:*` scripts; PGlite only by `*.test.ts` / `src/database/testing.ts`. The runtime migrator (`src/database/migrate.ts`) uses `drizzle-orm/bun-sql/migrator` and is not imported by `src/index.ts`. Verify after `bun run build`: `build/index.js` must not contain `drizzle-kit`/`pglite`/`@electric-sql`.
 - Never commit, never create pull requests, except if the user explicitly asks for it.
