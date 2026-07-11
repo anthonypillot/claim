@@ -1,19 +1,38 @@
 import { t } from "elysia";
 
+/** Defaults applied when a request omits the query params; the single source of truth for both the schema and the resolver. */
+export const DEFAULT_LOCALE = "en-US";
+export const DEFAULT_COUNTRY = "US";
+
 export const GiveawaysQuerySchema = t.Object({
-  locale: t.String({
-    pattern: "^[a-z]{2}(-[A-Za-z]{2,4})?$",
-    default: "en-US",
-    description: "BCP 47 language tag; drives title/description language",
-    examples: ["en-US", "fr-FR"],
-  }),
-  country: t.String({
-    pattern: "^[A-Za-z]{2}$",
-    default: "US",
-    description: "ISO 3166-1 alpha-2 country; drives pricing currency and regional availability",
-    examples: ["FR", "US"],
-  }),
+  locale: t.Optional(
+    t.String({
+      pattern: "^[a-z]{2}(-[A-Za-z]{2,4})?$",
+      default: DEFAULT_LOCALE,
+      description: "BCP 47 language tag; drives title/description language",
+      examples: ["en-US", "fr-FR"],
+    }),
+  ),
+  country: t.Optional(
+    t.String({
+      pattern: "^[A-Za-z]{2}$",
+      default: DEFAULT_COUNTRY,
+      description: "ISO 3166-1 alpha-2 country; drives pricing currency and regional availability",
+      examples: ["FR", "US"],
+    }),
+  ),
 });
+
+/** A fully-resolved market (locale + country), both guaranteed present. */
+export type Market = { locale: string; country: string };
+
+/** Fills omitted query params with the documented defaults, yielding a fully-resolved market. */
+export function resolveMarket(query: typeof GiveawaysQuerySchema.static): Market {
+  return {
+    locale: query.locale ?? DEFAULT_LOCALE,
+    country: query.country ?? DEFAULT_COUNTRY,
+  };
+}
 
 export const GiveawayImagesSchema = t.Object(
   {

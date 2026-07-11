@@ -11,6 +11,7 @@ import { createGiveaways } from "./index.ts";
 import {
   type AllGiveawaysResponse,
   CACHE_TTL_HOURS,
+  GiveawaysQuerySchema,
   STORE_IDS,
   type StoreGiveaway,
 } from "./model.ts";
@@ -101,6 +102,12 @@ beforeEach(async () => {
 
 afterEach(() => {
   fetchSpy.mockRestore();
+});
+
+describe("GiveawaysQuerySchema", () => {
+  it("marks locale and country as optional (omittable, defaults applied at runtime)", () => {
+    expect(GiveawaysQuerySchema.required).toBeUndefined();
+  });
 });
 
 describe("GET /giveaways (cold cache → live fallback)", () => {

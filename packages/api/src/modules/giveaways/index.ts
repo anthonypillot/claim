@@ -10,6 +10,7 @@ import {
   GiveawaysQuerySchema,
   GogGiveawaysResponseSchema,
   PrimeGamingGiveawaysResponseSchema,
+  resolveMarket,
   SteamGiveawaysResponseSchema,
 } from "./model.ts";
 import { getAllFreeGamesCached, getStoreFreeGamesCached } from "./service.ts";
@@ -30,14 +31,14 @@ export function createGiveaways(getDatabase: () => Database = getDb) {
         return status(502, { error: `Failed to fetch giveaways from ${error.store}` });
       }
     })
-    .get("/", ({ query }) => getAllFreeGamesCached(getDatabase(), query), {
+    .get("/", ({ query }) => getAllFreeGamesCached(getDatabase(), resolveMarket(query)), {
       query: GiveawaysQuerySchema,
       response: { 200: AllGiveawaysResponseSchema, 502: ErrorResponseSchema },
       detail: { summary: "List currently-free giveaways across all stores", tags: ["giveaways"] },
     })
     .get(
       "/epic-games",
-      ({ query }) => getStoreFreeGamesCached(getDatabase(), "epic-games", query),
+      ({ query }) => getStoreFreeGamesCached(getDatabase(), "epic-games", resolveMarket(query)),
       {
         query: GiveawaysQuerySchema,
         response: { 200: EpicGamesGiveawaysResponseSchema, 502: ErrorResponseSchema },
@@ -46,21 +47,29 @@ export function createGiveaways(getDatabase: () => Database = getDb) {
     )
     .get(
       "/prime-gaming",
-      ({ query }) => getStoreFreeGamesCached(getDatabase(), "prime-gaming", query),
+      ({ query }) => getStoreFreeGamesCached(getDatabase(), "prime-gaming", resolveMarket(query)),
       {
         query: GiveawaysQuerySchema,
         response: { 200: PrimeGamingGiveawaysResponseSchema, 502: ErrorResponseSchema },
         detail: { summary: "List currently-free Prime Gaming full games", tags: ["giveaways"] },
       },
     )
-    .get("/gog", ({ query }) => getStoreFreeGamesCached(getDatabase(), "gog", query), {
-      query: GiveawaysQuerySchema,
-      response: { 200: GogGiveawaysResponseSchema, 502: ErrorResponseSchema },
-      detail: { summary: "List currently-free GOG giveaways", tags: ["giveaways"] },
-    })
-    .get("/steam", ({ query }) => getStoreFreeGamesCached(getDatabase(), "steam", query), {
-      query: GiveawaysQuerySchema,
-      response: { 200: SteamGiveawaysResponseSchema, 502: ErrorResponseSchema },
-      detail: { summary: "List currently-free Steam giveaways", tags: ["giveaways"] },
-    });
+    .get(
+      "/gog",
+      ({ query }) => getStoreFreeGamesCached(getDatabase(), "gog", resolveMarket(query)),
+      {
+        query: GiveawaysQuerySchema,
+        response: { 200: GogGiveawaysResponseSchema, 502: ErrorResponseSchema },
+        detail: { summary: "List currently-free GOG giveaways", tags: ["giveaways"] },
+      },
+    )
+    .get(
+      "/steam",
+      ({ query }) => getStoreFreeGamesCached(getDatabase(), "steam", resolveMarket(query)),
+      {
+        query: GiveawaysQuerySchema,
+        response: { 200: SteamGiveawaysResponseSchema, 502: ErrorResponseSchema },
+        detail: { summary: "List currently-free Steam giveaways", tags: ["giveaways"] },
+      },
+    );
 }
