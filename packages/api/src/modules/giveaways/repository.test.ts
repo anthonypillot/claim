@@ -1,30 +1,39 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
-import { giveawayFetches } from "../../db/schema.ts";
+import { giveawayFetches, giveaways } from "../../db/schema.ts";
 import { createTestDatabase } from "../../db/testing.ts";
-import { CACHE_TTL_HOURS, type StoreGiveaway } from "./model.ts";
+import { CACHE_TTL_HOURS, type Giveaway } from "./model.ts";
 import {
   findActiveGiveaways,
+  findFreshStoreIds,
   isFresh,
-  isMarketFresh,
-  markFetched,
+  refreshStore,
   toStoreGiveaway,
-  upsertGiveaways,
 } from "./repository.ts";
 
 const MARKET = { locale: "en-US", country: "US" };
 
-let db: Awaited<ReturnType<typeof createTestDatabase>>;
+let context: Awaited<ReturnType<typeof createTestDatabase>>;
+let db: Awaited<ReturnType<typeof createTestDatabase>>["db"];
 
-beforeEach(async () => {
-  db = await createTestDatabase();
+beforeAll(async () => {
+  context = await createTestDatabase();
+  db = context.db;
 });
 
-function giveaway(overrides: Partial<StoreGiveaway> = {}): StoreGiveaway {
+beforeEach(async () => {
+  await db.delete(giveaways);
+  await db.delete(giveawayFetches);
+});
+
+afterAll(async () => {
+  await context.close();
+});
+
+function giveaway(overrides: Partial<Giveaway> = {}): Giveaway {
   return {
-    store: "steam",
     id: "100100",
     title: "A Free Game",
     description: "desc",
@@ -37,75 +46,99 @@ function giveaway(overrides: Partial<StoreGiveaway> = {}): StoreGiveaway {
   };
 }
 
-describe("upsertGiveaways", () => {
-  it("reports zero and writes nothing for an empty batch", async () => {
-    expect(await upsertGiveaways(db, MARKET, [])).toBe(0);
-    expect(await findActiveGiveaways(db, MARKET)).toHaveLength(0);
+describe("refreshStore", () => {
+  it("stores a fetched-but-empty snapshot as fresh", async () => {
+    expect(await refreshStore(db, MARKET, "steam", [])).toBe(0);
+    expect(await findActiveGiveaways(db, { ...MARKET, store: "steam" })).toHaveLength(0);
+    expect(await isFresh(db, { ...MARKET, store: "steam" })).toBe(true);
   });
 
-  it("inserts rows and reports how many were written", async () => {
-    const written = await upsertGiveaways(db, MARKET, [
-      giveaway(),
-      giveaway({ store: "gog", id: "555" }),
-    ]);
-
-    expect(written).toBe(2);
-    expect(await findActiveGiveaways(db, MARKET)).toHaveLength(2);
-  });
-
-  it("dedups a batch by (store, id), keeping the last occurrence", async () => {
-    const written = await upsertGiveaways(db, MARKET, [
+  it("deduplicates a snapshot by id, keeping the last occurrence", async () => {
+    const written = await refreshStore(db, MARKET, "steam", [
       giveaway({ id: "dup", title: "First" }),
       giveaway({ id: "dup", title: "Last" }),
     ]);
 
-    // Postgres rejects an ON CONFLICT batch that targets the same row twice, so dedup must happen first.
     expect(written).toBe(1);
     const [row] = await findActiveGiveaways(db, MARKET);
     expect(row?.title).toBe("Last");
   });
 
-  it("preserves first_seen_at and bumps last_seen_at on re-upsert", async () => {
-    await upsertGiveaways(db, MARKET, [giveaway()]);
-    const [before] = await findActiveGiveaways(db, MARKET);
-    if (!before) throw new Error("expected a seeded row");
-
-    await Bun.sleep(25);
-    await upsertGiveaways(db, MARKET, [giveaway({ title: "Renamed" })]);
-    const [after] = await findActiveGiveaways(db, MARKET);
-    if (!after) throw new Error("expected the row after re-upsert");
-
-    expect(after.title).toBe("Renamed");
-    expect(after.firstSeenAt.getTime()).toBe(before.firstSeenAt.getTime());
-    expect(after.lastSeenAt.getTime()).toBeGreaterThan(before.lastSeenAt.getTime());
-  });
-
-  it("round-trips a full giveaway back to the API shape", async () => {
-    const input = giveaway();
-    await upsertGiveaways(db, MARKET, [input]);
-
-    const [row] = await findActiveGiveaways(db, MARKET);
-    if (!row) throw new Error("expected a seeded row");
-    expect(toStoreGiveaway(row)).toEqual(input);
-  });
-
-  it("round-trips a null price and null images", async () => {
+  it("round-trips full and nullable giveaway fields", async () => {
     const input = giveaway({
       price: null,
       url: null,
       images: { wide: null, tall: null, thumbnail: null },
     });
-    await upsertGiveaways(db, MARKET, [input]);
+    await refreshStore(db, MARKET, "steam", [input]);
 
     const [row] = await findActiveGiveaways(db, MARKET);
     if (!row) throw new Error("expected a seeded row");
-    expect(toStoreGiveaway(row)).toEqual(input);
+    expect(toStoreGiveaway(row)).toEqual({ ...input, store: "steam" });
+  });
+
+  it("deactivates omitted rows without deleting their history", async () => {
+    await refreshStore(db, MARKET, "steam", [giveaway({ id: "kept" }), giveaway({ id: "gone" })]);
+    await refreshStore(db, MARKET, "steam", [giveaway({ id: "kept" })]);
+
+    expect((await findActiveGiveaways(db, MARKET)).map((row) => row.id)).toEqual(["kept"]);
+    const [historical] = await db
+      .select()
+      .from(giveaways)
+      .where(and(eq(giveaways.store, "steam"), eq(giveaways.id, "gone")));
+    expect(historical?.isActive).toBe(false);
+  });
+
+  it("reactivates a returning row while preserving first-seen history", async () => {
+    await refreshStore(db, MARKET, "steam", [giveaway()]);
+    const [first] = await findActiveGiveaways(db, MARKET);
+    if (!first) throw new Error("expected a seeded row");
+
+    await Bun.sleep(25);
+    await refreshStore(db, MARKET, "steam", []);
+    await refreshStore(db, MARKET, "steam", [giveaway({ title: "Returned" })]);
+    const [returned] = await findActiveGiveaways(db, MARKET);
+    if (!returned) throw new Error("expected a reactivated row");
+
+    expect(returned.title).toBe("Returned");
+    expect(returned.isActive).toBe(true);
+    expect(returned.firstSeenAt.getTime()).toBe(first.firstSeenAt.getTime());
+    expect(returned.lastSeenAt.getTime()).toBeGreaterThan(first.lastSeenAt.getTime());
+  });
+
+  it("rolls back deactivation when the replacement snapshot is invalid", async () => {
+    await refreshStore(db, MARKET, "steam", [giveaway()]);
+    await db
+      .update(giveawayFetches)
+      .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` })
+      .where(eq(giveawayFetches.store, "steam"));
+    const invalid = giveaway({
+      price: { original: 1, formatted: null, currency: "USD" } as unknown as Giveaway["price"],
+    });
+
+    await expect(refreshStore(db, MARKET, "steam", [invalid])).rejects.toThrow();
+
+    expect(await findActiveGiveaways(db, MARKET)).toHaveLength(1);
+    expect(await isFresh(db, { ...MARKET, store: "steam" })).toBe(false);
+  });
+
+  it("serializes concurrent replacements of the same scope", async () => {
+    await Promise.all([
+      refreshStore(db, MARKET, "steam", [giveaway({ id: "first" })]),
+      refreshStore(db, MARKET, "steam", [giveaway({ id: "second" })]),
+    ]);
+
+    const ids = (await findActiveGiveaways(db, MARKET)).map((row) => row.id);
+    expect(ids).toHaveLength(1);
+    const [id] = ids;
+    if (!id) throw new Error("expected one active row");
+    expect(["first", "second"]).toContain(id);
   });
 });
 
 describe("findActiveGiveaways", () => {
-  it("returns only rows still within their free window", async () => {
-    await upsertGiveaways(db, MARKET, [
+  it("returns only active rows still inside their free window", async () => {
+    await refreshStore(db, MARKET, "steam", [
       giveaway({ id: "live" }),
       giveaway({ id: "expired", freeUntil: new Date(Date.now() - 1000).toISOString() }),
     ]);
@@ -113,72 +146,29 @@ describe("findActiveGiveaways", () => {
     expect((await findActiveGiveaways(db, MARKET)).map((row) => row.id)).toEqual(["live"]);
   });
 
-  it("scopes by store and by market", async () => {
-    await upsertGiveaways(db, MARKET, [
-      giveaway({ store: "steam" }),
-      giveaway({ store: "gog", id: "g1" }),
-    ]);
-    await upsertGiveaways(db, { locale: "fr-FR", country: "FR" }, [giveaway({ store: "steam" })]);
+  it("does not deactivate another store or market", async () => {
+    await refreshStore(db, MARKET, "steam", [giveaway({ id: "steam" })]);
+    await refreshStore(db, MARKET, "gog", [giveaway({ id: "gog" })]);
+    await refreshStore(db, { locale: "fr-FR", country: "FR" }, "steam", [giveaway({ id: "fr" })]);
+    await refreshStore(db, MARKET, "steam", []);
 
-    expect(
-      (await findActiveGiveaways(db, { ...MARKET, store: "gog" })).map((r) => r.store),
-    ).toEqual(["gog"]);
-    expect(await findActiveGiveaways(db, { ...MARKET, store: "steam" })).toHaveLength(1);
+    expect(await findActiveGiveaways(db, { ...MARKET, store: "steam" })).toHaveLength(0);
+    expect(await findActiveGiveaways(db, { ...MARKET, store: "gog" })).toHaveLength(1);
     expect(await findActiveGiveaways(db, { locale: "fr-FR", country: "FR" })).toHaveLength(1);
   });
 });
 
-describe("markFetched / isFresh", () => {
-  it("reports a store fresh only after it is marked", async () => {
-    expect(await isFresh(db, { ...MARKET, store: "steam" })).toBe(false);
-
-    await markFetched(db, MARKET, ["steam"]);
-
-    expect(await isFresh(db, { ...MARKET, store: "steam" })).toBe(true);
-  });
-
-  it("marks a fetched-but-empty store fresh, distinct from a never-fetched store", async () => {
-    // No giveaway rows written — only the fetch marker. isFresh must still report the store fresh.
-    await markFetched(db, MARKET, ["steam"]);
-
-    expect(await findActiveGiveaways(db, { ...MARKET, store: "steam" })).toHaveLength(0);
-    expect(await isFresh(db, { ...MARKET, store: "steam" })).toBe(true);
-    expect(await isFresh(db, { ...MARKET, store: "gog" })).toBe(false);
-  });
-
-  it("treats a marker older than the TTL as stale", async () => {
-    // Insert a marker fetched just beyond the TTL window.
+describe("freshness", () => {
+  it("returns only known stores with current markers", async () => {
+    await refreshStore(db, MARKET, "steam", []);
+    await db.insert(giveawayFetches).values({ store: "retired", ...MARKET });
     await db.insert(giveawayFetches).values({
-      store: "steam",
-      locale: MARKET.locale,
-      country: MARKET.country,
+      store: "gog",
+      ...MARKET,
       fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'`,
     });
 
-    expect(await isFresh(db, { ...MARKET, store: "steam" })).toBe(false);
-  });
-
-  it("scopes freshness by store and market", async () => {
-    await markFetched(db, MARKET, ["steam", "gog"]);
-
-    expect(await isFresh(db, { ...MARKET, store: "epic-games" })).toBe(false);
-    expect(await isFresh(db, { locale: "fr-FR", country: "FR", store: "steam" })).toBe(false);
-  });
-
-  it("is idempotent across repeated marks", async () => {
-    await markFetched(db, MARKET, ["steam"]);
-    await markFetched(db, MARKET, ["steam"]);
-
-    expect(await isFresh(db, { ...MARKET, store: "steam" })).toBe(true);
-  });
-});
-
-describe("isMarketFresh", () => {
-  it("is true only when every store has been fetched within the TTL", async () => {
-    await markFetched(db, MARKET, ["epic-games", "prime-gaming", "gog"]);
-    expect(await isMarketFresh(db, MARKET)).toBe(false);
-
-    await markFetched(db, MARKET, ["steam"]);
-    expect(await isMarketFresh(db, MARKET)).toBe(true);
+    expect(await findFreshStoreIds(db, MARKET)).toEqual(["steam"]);
+    expect(await isFresh(db, { ...MARKET, store: "gog" })).toBe(false);
   });
 });

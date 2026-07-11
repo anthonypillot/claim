@@ -1,4 +1,4 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "../../db/client.ts";
 import type { GiveawayRow, NewGiveawayRow } from "../../db/schema.ts";
@@ -13,13 +13,14 @@ const log = createLogger("giveaways repository");
 type Scope = { locale: string; country: string; store?: StoreId };
 
 function toRow(
-  giveaway: StoreGiveaway,
+  store: StoreId,
+  giveaway: Giveaway,
   locale: string,
   country: string,
   now: Date,
 ): NewGiveawayRow {
   return {
-    store: giveaway.store,
+    store,
     id: giveaway.id,
     locale,
     country,
@@ -34,9 +35,9 @@ function toRow(
     priceFormatted: giveaway.price?.formatted ?? null,
     priceCurrency: giveaway.price?.currency ?? null,
     freeUntil: new Date(giveaway.freeUntil),
+    isActive: true,
     // firstSeenAt is intentionally omitted so it defaults on insert and is preserved on update.
     lastSeenAt: now,
-    fetchedAt: now,
   };
 }
 
@@ -72,51 +73,85 @@ function scopeWhere(scope: Scope) {
   return and(
     eq(giveaways.locale, scope.locale),
     eq(giveaways.country, scope.country),
-    scope.store ? eq(giveaways.store, scope.store) : undefined,
+    scope.store ? eq(giveaways.store, scope.store) : inArray(giveaways.store, STORE_IDS),
   );
 }
 
 /**
- * Upserts a market's giveaways: refreshes mutable fields + `last_seen_at`/`fetched_at`, preserves
- * `first_seen_at`, and never deletes. Returns the number of rows written.
+ * Atomically replaces one store/market's active snapshot while retaining omitted rows as history.
+ * An empty successful refresh deactivates the old snapshot and still advances the freshness marker.
  */
-export async function upsertGiveaways(
+export async function refreshStore(
   db: Database,
   market: { locale: string; country: string },
-  items: StoreGiveaway[],
+  store: StoreId,
+  items: Giveaway[],
 ): Promise<number> {
-  if (items.length === 0) {
-    log.debug(market, "no giveaways to upsert");
-    return 0;
-  }
   const now = new Date();
-  // Dedup by (store, id): Postgres rejects an ON CONFLICT DO UPDATE batch that targets the same row twice,
-  // and an upstream can list the same offer id more than once. Last occurrence wins.
-  const deduped = new Map<string, StoreGiveaway>();
-  for (const item of items) deduped.set(`${item.store}\u0000${item.id}`, item);
-  const rows = [...deduped.values()].map((item) => toRow(item, market.locale, market.country, now));
-  await db
-    .insert(giveaways)
-    .values(rows)
-    .onConflictDoUpdate({
-      target: [giveaways.store, giveaways.id, giveaways.locale, giveaways.country],
-      set: {
-        title: sql`excluded.title`,
-        description: sql`excluded.description`,
-        url: sql`excluded.url`,
-        imageWide: sql`excluded.image_wide`,
-        imageTall: sql`excluded.image_tall`,
-        imageThumbnail: sql`excluded.image_thumbnail`,
-        seller: sql`excluded.seller`,
-        priceOriginal: sql`excluded.price_original`,
-        priceFormatted: sql`excluded.price_formatted`,
-        priceCurrency: sql`excluded.price_currency`,
-        freeUntil: sql`excluded.free_until`,
-        lastSeenAt: sql`now()`,
-        fetchedAt: sql`now()`,
-      },
-    });
-  log.debug({ ...market, rows: rows.length }, "upserted giveaways");
+  const deduped = new Map(items.map((item) => [item.id, item]));
+  const rows = [...deduped.values()].map((item) =>
+    toRow(store, item, market.locale, market.country, now),
+  );
+
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(giveawayFetches)
+      .values({ store, locale: market.locale, country: market.country })
+      .onConflictDoNothing();
+    await tx
+      .select({ store: giveawayFetches.store })
+      .from(giveawayFetches)
+      .where(
+        and(
+          eq(giveawayFetches.store, store),
+          eq(giveawayFetches.locale, market.locale),
+          eq(giveawayFetches.country, market.country),
+        ),
+      )
+      .for("update");
+
+    await tx
+      .update(giveaways)
+      .set({ isActive: false })
+      .where(scopeWhere({ ...market, store }));
+
+    if (rows.length > 0) {
+      await tx
+        .insert(giveaways)
+        .values(rows)
+        .onConflictDoUpdate({
+          target: [giveaways.store, giveaways.id, giveaways.locale, giveaways.country],
+          set: {
+            title: sql`excluded.title`,
+            description: sql`excluded.description`,
+            url: sql`excluded.url`,
+            imageWide: sql`excluded.image_wide`,
+            imageTall: sql`excluded.image_tall`,
+            imageThumbnail: sql`excluded.image_thumbnail`,
+            seller: sql`excluded.seller`,
+            priceOriginal: sql`excluded.price_original`,
+            priceFormatted: sql`excluded.price_formatted`,
+            priceCurrency: sql`excluded.price_currency`,
+            freeUntil: sql`excluded.free_until`,
+            isActive: true,
+            lastSeenAt: sql`excluded.last_seen_at`,
+          },
+        });
+    }
+
+    await tx
+      .update(giveawayFetches)
+      .set({ fetchedAt: sql`now()` })
+      .where(
+        and(
+          eq(giveawayFetches.store, store),
+          eq(giveawayFetches.locale, market.locale),
+          eq(giveawayFetches.country, market.country),
+        ),
+      );
+  });
+
+  log.debug({ store, ...market, rows: rows.length }, "refreshed store cache");
   return rows.length;
 }
 
@@ -125,38 +160,28 @@ export async function findActiveGiveaways(db: Database, scope: Scope): Promise<G
   return db
     .select()
     .from(giveaways)
-    .where(and(scopeWhere(scope), gt(giveaways.freeUntil, sql`now()`)));
+    .where(
+      and(scopeWhere(scope), eq(giveaways.isActive, true), gt(giveaways.freeUntil, sql`now()`)),
+    );
 }
 
-/** Records the fetch time for each store of a market, so later reads within the TTL serve from cache. */
-export async function markFetched(
+/** Known stores whose market scope was refreshed within the TTL. */
+export async function findFreshStoreIds(
   db: Database,
   market: { locale: string; country: string },
-  stores: StoreId[],
-): Promise<void> {
-  if (stores.length === 0) return;
-  const rows = stores.map((store) => ({ store, locale: market.locale, country: market.country }));
-  await db
-    .insert(giveawayFetches)
-    .values(rows)
-    .onConflictDoUpdate({
-      target: [giveawayFetches.store, giveawayFetches.locale, giveawayFetches.country],
-      set: { fetchedAt: sql`now()` },
-    });
-  log.debug({ ...market, stores }, "marked stores fetched");
-}
-
-/** How many stores of a scope were fetched within the TTL window. */
-function countFresh(db: Database, scope: Scope): Promise<number> {
-  return db.$count(
-    giveawayFetches,
-    and(
-      eq(giveawayFetches.locale, scope.locale),
-      eq(giveawayFetches.country, scope.country),
-      scope.store ? eq(giveawayFetches.store, scope.store) : undefined,
-      gt(giveawayFetches.fetchedAt, sql`now() - ${CACHE_TTL_HOURS} * interval '1 hour'`),
-    ),
-  );
+): Promise<StoreId[]> {
+  const rows = await db
+    .select({ store: giveawayFetches.store })
+    .from(giveawayFetches)
+    .where(
+      and(
+        eq(giveawayFetches.locale, market.locale),
+        eq(giveawayFetches.country, market.country),
+        inArray(giveawayFetches.store, STORE_IDS),
+        gt(giveawayFetches.fetchedAt, sql`now() - ${CACHE_TTL_HOURS} * interval '1 hour'`),
+      ),
+    );
+  return rows.map((row) => row.store as StoreId);
 }
 
 /**
@@ -167,13 +192,5 @@ export async function isFresh(
   db: Database,
   scope: { locale: string; country: string; store: StoreId },
 ): Promise<boolean> {
-  return (await countFresh(db, scope)) > 0;
-}
-
-/** Whether the whole market is fresh: every store fetched within the TTL. */
-export async function isMarketFresh(
-  db: Database,
-  market: { locale: string; country: string },
-): Promise<boolean> {
-  return (await countFresh(db, market)) >= STORE_IDS.length;
+  return (await findFreshStoreIds(db, scope)).includes(scope.store);
 }

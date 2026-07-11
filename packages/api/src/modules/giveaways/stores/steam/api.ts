@@ -1,10 +1,6 @@
 import { createLogger } from "../../../../utils/logger.ts";
-import { UpstreamError } from "../shared.ts";
-import type {
-  SteamCandidate,
-  SteamFeaturedCategoriesResponse,
-  SteamGetItemsResponse,
-} from "./types.ts";
+import { isRecord, UpstreamError } from "../shared.ts";
+import type { SteamCandidate, SteamFeaturedItem, SteamStoreItem } from "./types.ts";
 
 const log = createLogger("steam store");
 
@@ -37,17 +33,69 @@ function steamLanguage(locale: string): string {
 }
 
 /** Both upstream calls share the same JSON GET shape — and the same error wrapping. */
-async function fetchJson<T>(url: URL): Promise<T> {
+async function fetchJson(url: URL): Promise<unknown> {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
     if (!response.ok) {
       throw new UpstreamError(STORE, `upstream returned ${response.status}`);
     }
-    return (await response.json()) as T;
+    return await response.json();
   } catch (cause) {
     if (cause instanceof UpstreamError) throw cause;
     throw new UpstreamError(STORE, "upstream request failed", { cause });
   }
+}
+
+function isFeaturedItem(value: unknown): value is SteamFeaturedItem {
+  return (
+    isRecord(value) &&
+    typeof value["id"] === "number" &&
+    (value["name"] === undefined || typeof value["name"] === "string") &&
+    (value["discount_percent"] === undefined || typeof value["discount_percent"] === "number") &&
+    (value["original_price"] == null || typeof value["original_price"] === "number") &&
+    (value["final_price"] === undefined || typeof value["final_price"] === "number") &&
+    (value["currency"] === undefined || typeof value["currency"] === "string") &&
+    (value["header_image"] == null || typeof value["header_image"] === "string") &&
+    (value["small_capsule_image"] == null || typeof value["small_capsule_image"] === "string")
+  );
+}
+
+function isStoreItem(value: unknown): value is SteamStoreItem {
+  if (!isRecord(value) || typeof value["appid"] !== "number") return false;
+  if (value["name"] !== undefined && typeof value["name"] !== "string") return false;
+  if (value["is_free"] !== undefined && typeof value["is_free"] !== "boolean") return false;
+  if (value["store_url_path"] !== undefined && typeof value["store_url_path"] !== "string") {
+    return false;
+  }
+  const option = value["best_purchase_option"];
+  if (option == null) return true;
+  if (!isRecord(option)) return false;
+  if (option["discount_pct"] !== undefined && typeof option["discount_pct"] !== "number") {
+    return false;
+  }
+  if (
+    option["final_price_in_cents"] !== undefined &&
+    typeof option["final_price_in_cents"] !== "string"
+  ) {
+    return false;
+  }
+  if (
+    option["formatted_original_price"] !== undefined &&
+    typeof option["formatted_original_price"] !== "string"
+  ) {
+    return false;
+  }
+  const discounts = option["active_discounts"];
+  return (
+    discounts === undefined ||
+    (Array.isArray(discounts) &&
+      discounts.every(
+        (discount) =>
+          isRecord(discount) &&
+          (discount["discount_end_date"] === undefined ||
+            typeof discount["discount_end_date"] === "number"),
+      ))
+  );
 }
 
 /**
@@ -66,10 +114,11 @@ export async function fetchFreeToKeep(options: {
   const featuredUrl = new URL(FEATURED_URL);
   featuredUrl.searchParams.set("cc", options.country);
   featuredUrl.searchParams.set("l", language);
-  const featured = await fetchJson<SteamFeaturedCategoriesResponse>(featuredUrl);
+  const featured = await fetchJson(featuredUrl);
 
-  const specials = featured.specials?.items;
-  if (!Array.isArray(specials)) {
+  const specialsGroup = isRecord(featured) ? featured["specials"] : undefined;
+  const specials = isRecord(specialsGroup) ? specialsGroup["items"] : undefined;
+  if (!Array.isArray(specials) || !specials.every(isFeaturedItem)) {
     throw new UpstreamError(STORE, "unexpected upstream response shape");
   }
 
@@ -90,10 +139,11 @@ export async function fetchFreeToKeep(options: {
       data_request: { include_all_purchase_options: true, include_assets: true },
     }),
   );
-  const enriched = await fetchJson<SteamGetItemsResponse>(itemsUrl);
+  const enriched = await fetchJson(itemsUrl);
 
-  const storeItems = enriched.response?.store_items;
-  if (!Array.isArray(storeItems)) {
+  const enrichedResponse = isRecord(enriched) ? enriched["response"] : undefined;
+  const storeItems = isRecord(enrichedResponse) ? enrichedResponse["store_items"] : undefined;
+  if (!Array.isArray(storeItems) || !storeItems.every(isStoreItem)) {
     throw new UpstreamError(STORE, "unexpected upstream response shape");
   }
 

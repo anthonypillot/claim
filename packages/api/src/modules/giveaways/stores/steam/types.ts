@@ -3,7 +3,6 @@
 
 export type SteamFeaturedItem = {
   id: number;
-  type?: number;
   name?: string;
   discount_percent?: number;
   original_price?: number | null;
@@ -11,7 +10,6 @@ export type SteamFeaturedItem = {
   currency?: string;
   header_image?: string | null;
   small_capsule_image?: string | null;
-  discount_expiration?: number;
 };
 
 export type SteamFeaturedCategoriesResponse = {
@@ -27,7 +25,6 @@ export type SteamActiveDiscount = {
 export type SteamPurchaseOption = {
   discount_pct?: number;
   final_price_in_cents?: string;
-  original_price_in_cents?: string;
   formatted_original_price?: string;
   active_discounts?: SteamActiveDiscount[];
 };

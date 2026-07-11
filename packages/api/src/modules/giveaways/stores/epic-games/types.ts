@@ -21,7 +21,6 @@ export type EpicOffer = {
   };
   promotions?: {
     promotionalOffers?: { promotionalOffers?: { startDate: string; endDate: string }[] }[];
-    upcomingPromotionalOffers?: { promotionalOffers?: { startDate: string; endDate: string }[] }[];
   } | null;
 };
 

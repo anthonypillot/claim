@@ -1,6 +1,6 @@
 import { createLogger } from "../../../../utils/logger.ts";
-import { UpstreamError } from "../shared.ts";
-import type { PrimeFreeGamesResponse, PrimeItem } from "./types.ts";
+import { isRecord, UpstreamError } from "../shared.ts";
+import type { PrimeItem } from "./types.ts";
 
 const log = createLogger("prime gaming store");
 
@@ -13,8 +13,72 @@ const STORE = "prime-gaming";
 // A browser-like User-Agent is required; default fetch UAs get blocked upstream.
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
-// The live markup uses single-quoted attributes with `name` before `value`.
-const CSRF_INPUT_PATTERN = /<input[^>]*name=["']csrf-key["'][^>]*value=["']([^"']+)["']/;
+const INPUT_PATTERN = /<input\b[^>]*>/gi;
+const CSRF_NAME_PATTERN = /\bname\s*=\s*["']csrf-key["']/i;
+const VALUE_PATTERN = /\bvalue\s*=\s*["']([^"']+)["']/i;
+
+function extractCsrfToken(html: string): string | undefined {
+  for (const [input] of html.matchAll(INPUT_PATTERN)) {
+    if (CSRF_NAME_PATTERN.test(input)) return VALUE_PATTERN.exec(input)?.[1];
+  }
+  return undefined;
+}
+
+function isMedia(value: unknown): boolean {
+  if (value == null) return true;
+  if (!isRecord(value)) return false;
+  const media = value["defaultMedia"];
+  return (
+    media == null ||
+    (isRecord(media) && (media["src1x"] === undefined || typeof media["src1x"] === "string"))
+  );
+}
+
+function isPrimeItem(value: unknown): value is PrimeItem {
+  if (!isRecord(value) || typeof value["id"] !== "string") return false;
+  if (value["isFGWP"] !== undefined && typeof value["isFGWP"] !== "boolean") return false;
+  if (value["category"] !== undefined && typeof value["category"] !== "string") return false;
+  const assets = value["assets"];
+  if (assets !== undefined) {
+    if (!isRecord(assets)) return false;
+    if (assets["title"] !== undefined && typeof assets["title"] !== "string") return false;
+    if (assets["externalClaimLink"] != null && typeof assets["externalClaimLink"] !== "string") {
+      return false;
+    }
+    if (
+      assets["shortformDescription"] != null &&
+      typeof assets["shortformDescription"] !== "string"
+    ) {
+      return false;
+    }
+    if (!isMedia(assets["cardMedia"]) || !isMedia(assets["heroMedia"])) return false;
+  }
+  const game = value["game"];
+  if (game != null) {
+    if (!isRecord(game)) return false;
+    const gameAssets = game["assets"];
+    if (gameAssets != null) {
+      if (!isRecord(gameAssets)) return false;
+      if (gameAssets["title"] !== undefined && typeof gameAssets["title"] !== "string") {
+        return false;
+      }
+      if (gameAssets["publisher"] != null && typeof gameAssets["publisher"] !== "string") {
+        return false;
+      }
+    }
+  }
+  const offers = value["offers"];
+  return (
+    offers == null ||
+    (Array.isArray(offers) &&
+      offers.every(
+        (offer) =>
+          isRecord(offer) &&
+          (offer["startTime"] == null || typeof offer["startTime"] === "string") &&
+          (offer["endTime"] == null || typeof offer["endTime"] === "string"),
+      ))
+  );
+}
 
 // Trimmed variant of the web app's OffersContext_Offers_And_Items query: only the FREE_GAMES
 // collection (full games — in-game loot lives in a separate collection) and only mapped fields.
@@ -66,7 +130,7 @@ async function fetchSession(): Promise<{ cookie: string; csrfToken: string }> {
     .getSetCookie()
     .map((setCookie) => setCookie.split(";")[0] ?? setCookie)
     .join("; ");
-  const csrfToken = CSRF_INPUT_PATTERN.exec(await response.text())?.[1];
+  const csrfToken = extractCsrfToken(await response.text());
   if (!csrfToken) {
     throw new UpstreamError(STORE, "missing csrf token in session response");
   }
@@ -83,7 +147,7 @@ export async function fetchFreeGamesItems(options: {
   country: string;
 }): Promise<PrimeItem[]> {
   log.debug({ locale: options.locale, country: options.country }, "fetching free games");
-  let body: PrimeFreeGamesResponse;
+  let body: unknown;
   try {
     const { cookie, csrfToken } = await fetchSession();
     const response = await fetch(PRIME_GRAPHQL_URL, {
@@ -106,7 +170,7 @@ export async function fetchFreeGamesItems(options: {
     if (!response.ok) {
       throw new UpstreamError(STORE, `upstream returned ${response.status}`);
     }
-    body = (await response.json()) as PrimeFreeGamesResponse;
+    body = await response.json();
   } catch (cause) {
     if (cause instanceof UpstreamError) throw cause;
     throw new UpstreamError(STORE, "upstream request failed", { cause });
@@ -114,12 +178,17 @@ export async function fetchFreeGamesItems(options: {
 
   // GraphQL errors come back as 200s with no data; surface the first message so a broken
   // query (e.g. an unknown field) is diagnosable in logs instead of a generic shape error.
-  if (body.errors?.length) {
-    const message = body.errors[0]?.message ?? "unknown error";
+  const errors = isRecord(body) ? body["errors"] : undefined;
+  if (Array.isArray(errors) && errors.length > 0) {
+    const first = errors[0];
+    const message =
+      isRecord(first) && typeof first["message"] === "string" ? first["message"] : "unknown error";
     throw new UpstreamError(STORE, `upstream graphql error: ${message}`);
   }
-  const items = body.data?.games?.items;
-  if (!Array.isArray(items)) {
+  const data = isRecord(body) ? body["data"] : undefined;
+  const games = isRecord(data) ? data["games"] : undefined;
+  const items = isRecord(games) ? games["items"] : undefined;
+  if (!Array.isArray(items) || !items.every(isPrimeItem)) {
     throw new UpstreamError(STORE, "unexpected upstream response shape");
   }
 

@@ -1,24 +1,18 @@
 # Giveaways request flow
 
-`GET /giveaways*` is a **read-through cache** over Postgres. A read serves the active cached rows when the
-requested scope is fresh (fetched within `CACHE_TTL_HOURS`, 24h); on a miss it fetches live, writes the result
-to the cache, and serves it. There is no separate refresh endpoint — the cache fills lazily on reads. See
-[`architecture.md`](./architecture.md) for the file layout.
+`GET /giveaways*` is a read-through cache over Postgres. Cache scopes are independent per store,
+locale, and country, with a 24-hour TTL. Supported locale/country inputs are canonicalized before
+they reach an upstream or become cache keys.
 
-**Participants** (each maps to a file in `packages/api/src/modules/giveaways/`):
-
-| Diagram name | Code |
+| Participant | Code |
 | --- | --- |
-| Route | `index.ts` — Elysia plugin: routing, TypeBox validation, 502 mapping |
-| Service | `service.ts` — read-through cache + live fan-out |
-| Repository | `repository.ts` — SQL queries + row↔API mappers |
-| DB | Postgres — `giveaways` (rows) + `giveaway_fetches` (per-store TTL markers) |
-| Stores | the storefront adapters under `stores/*` calling Epic / Prime / GOG / Steam |
+| Route | `index.ts` - query validation and HTTP error mapping |
+| Service | `service.ts` - per-store freshness and upstream orchestration |
+| Repository | `repository.ts` - transactional refreshes and row/API mapping |
+| DB | `giveaways` history plus `giveaway_fetches` freshness markers |
+| Stores | `stores/*` upstream adapters |
 
-## `GET /giveaways` (and `GET /giveaways/:store`)
-
-The per-store endpoint is identical except the scope carries a single `store`: freshness is checked for that
-one store (`isFresh`), and a miss fetches only that store.
+## Aggregate request
 
 ```mermaid
 sequenceDiagram
@@ -30,47 +24,33 @@ sequenceDiagram
     participant Stores
 
     Client->>Route: GET /giveaways?locale&country
-    Note over Route: TypeBox validates the query<br/>invalid locale/country → 422
-    Route->>Service: getAllFreeGamesCached(db, {locale, country})
+    Note over Route: Validate, canonicalize, reject unsupported values with 422
+    Route->>Service: getAllFreeGamesCached(db, market)
+    Service->>Repository: findFreshStoreIds(market)
+    Repository->>DB: Read current giveaway_fetches markers
+    DB-->>Service: Fresh store ids
+    Note over Service: stale = STORE_IDS - fresh
+    Service->>Stores: Fetch only stale stores concurrently
+    Stores-->>Service: Per-store results or failures
 
-    Service->>Repository: isMarketFresh(scope)  (every store within TTL?)
-    Repository->>DB: SELECT count(*) FROM giveaway_fetches<br/>WHERE scope AND fetched_at > now() − 24h
-    DB-->>Repository: fresh-store count
-    Repository-->>Service: fresh?
-
-    alt fresh — cache hit
-        Service->>Repository: findActiveGiveaways(scope)
-        Repository->>DB: SELECT … WHERE scope AND free_until > now()
-        DB-->>Repository: active rows
-        Repository-->>Service: active rows
-        Service-->>Route: { count, giveaways, errors: [] }
-        Route-->>Client: 200
-    else stale / never fetched — cache miss
-        Note over Service,Stores: getAllFreeGames() — concurrent live fan-out
-        Service->>Stores: fetch live giveaways
-        Stores-->>Service: per-store results / failures
-        alt every store failed
-            Service-->>Route: throw UpstreamError
-            Route-->>Client: 502 (mapped in onError)
-        else at least one store succeeded
-            Service->>Repository: upsertGiveaways(scope, giveaways)
-            Note over Repository: dedup by (store, id)
-            Repository->>DB: INSERT … ON CONFLICT DO UPDATE (never deletes)
-            Service->>Repository: markFetched(scope, succeeded stores)
-            Repository->>DB: upsert giveaway_fetches (fetched_at = now())
-            Service-->>Route: { count, giveaways, errors[] }
-            Route-->>Client: 200
-        end
+    loop Each successful stale store
+        Service->>Repository: refreshStore(market, store, giveaways)
+        Repository->>DB: Transaction: deactivate old rows, upsert active rows, advance marker
     end
+
+    Service->>Repository: findActiveGiveaways(market)
+    Repository->>DB: SELECT known stores WHERE is_active AND free_until > now()
+    DB-->>Service: Current rows
+    Service-->>Route: Fresh/updated rows plus failed-store errors
+    Route-->>Client: 200, or 502 when no store has usable data
 ```
 
-Notes:
+## Refresh semantics
 
-- **Writes on read** — a miss writes to the DB (upsert + fetch marker); this is intentional (read-through).
-- **Retention** — rows are never deleted; giveaways past their `free_until` are simply filtered out, so the
-  table also retains a history. A store fetched with zero giveaways still gets a `giveaway_fetches` marker, so
-  it's served empty from cache instead of re-fetched.
-- **Partial failure** — only the stores that succeeded are cached and marked fresh, so a still-failing store is
-  retried on the next request (self-healing); its error is surfaced in `errors` on the miss path.
-- **Staleness** — within the 24h window a brand-new upstream giveaway may not appear until the TTL triggers a
-  re-fetch; an ended giveaway drops out immediately via the `free_until` filter.
+- Upstream I/O and shape validation finish before the database transaction starts.
+- A successful empty response deactivates the previous store snapshot and advances its marker.
+- A giveaway omitted by the latest response remains in the table with `is_active = false`.
+- A returning giveaway is reactivated, keeps `first_seen_at`, and advances `last_seen_at`.
+- A failed upstream is not written or marked fresh, so only that store is retried next time.
+- A database failure rolls back deactivation, upserts, and the freshness marker together.
+- Per-store endpoints use the same `refreshStore` path but check and fetch only one store.

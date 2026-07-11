@@ -28,10 +28,12 @@ faster on repeat reads and resilient to upstream hiccups:
 
 - **Read-through with a 24h TTL** — a scope (store × locale × country) fetched within `CACHE_TTL_HOURS` is
   served from the DB; past that, the next read re-fetches and re-caches. No cron, no separate refresh endpoint.
-- **History** — rows are never deleted on expiry, so past giveaways are retained; "currently free" is just the
-  rows still inside their free window.
+- **History** — rows are never deleted during refresh. Offers omitted by the latest successful store refresh
+  become inactive; current results require both an active row and an unexpired free window.
 - **Empty stores** — a store fetched with no current giveaway is remembered as fetched, so it's served empty
   from cache instead of hitting the upstream on every request.
+- **Independent stores** — aggregate reads fetch only stale stores, so one failing upstream does not force
+  healthy stores to refresh again.
 
 ### More stores
 

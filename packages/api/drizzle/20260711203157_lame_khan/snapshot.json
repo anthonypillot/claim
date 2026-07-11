@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "b816f69a-410c-4807-b6fd-7e44d86d85c2",
+  "id": "bac90424-3520-4901-909a-6a0201dc69f1",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -266,6 +266,19 @@
       "table": "giveaways"
     },
     {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "true",
+      "generated": null,
+      "identity": null,
+      "name": "is_active",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "giveaways"
+    },
+    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -292,19 +305,6 @@
       "table": "giveaways"
     },
     {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "fetched_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "giveaways"
-    },
-    {
       "nameExplicit": true,
       "columns": [
         {
@@ -316,6 +316,13 @@
         },
         {
           "value": "country",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "is_active",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
@@ -334,7 +341,7 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "giveaways_locale_country_free_until_idx",
+      "name": "giveaways_locale_country_active_free_until_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "giveaways"

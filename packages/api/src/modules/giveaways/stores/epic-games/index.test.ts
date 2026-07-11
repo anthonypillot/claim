@@ -40,8 +40,8 @@ describe("fetchFreeGames", () => {
     ]);
   });
 
-  it("forwards locale and uppercased country to the upstream URL", async () => {
-    await fetchFreeGames({ locale: "fr-FR", country: "fr" });
+  it("forwards the canonical locale and country to the upstream URL", async () => {
+    await fetchFreeGames({ locale: "fr-FR", country: "FR" });
 
     const upstreamUrl = String(fetchSpy.mock.calls[0]?.[0]);
     expect(upstreamUrl).toStartWith(
@@ -80,6 +80,44 @@ describe("fetchFreeGames", () => {
     fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: {} })));
 
     await expect(fetchFreeGames({ locale: "en-US", country: "FR" })).rejects.toThrow(
+      "unexpected upstream response shape",
+    );
+  });
+
+  it("throws UpstreamError when an offer element is malformed", async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ data: { Catalog: { searchStore: { elements: [null] } } } })),
+    );
+
+    await expect(fetchFreeGames({ locale: "en-US", country: "US" })).rejects.toThrow(
+      "unexpected upstream response shape",
+    );
+  });
+
+  it("throws UpstreamError when a mapped nested field is malformed", async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            Catalog: {
+              searchStore: {
+                elements: [
+                  {
+                    id: "bad",
+                    title: "Bad",
+                    description: "Bad",
+                    offerType: "BASE_GAME",
+                    seller: { name: 123 },
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      ),
+    );
+
+    await expect(fetchFreeGames({ locale: "en-US", country: "US" })).rejects.toThrow(
       "unexpected upstream response shape",
     );
   });

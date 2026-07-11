@@ -2,7 +2,7 @@
 
 How the Claim API is organized — **feature-based** — and how that layout grows as the
 [roadmap](./roadmap.md) lands. The tree below is the **target** shape: unmarked entries ship
-today, `` entries are roadmap items not built yet, shown so the structure is clear before
+today, `[planned]` entries are roadmap items not built yet, shown so the structure is clear before
 the code exists.
 
 ## Feature-based architecture
@@ -18,7 +18,8 @@ so the app scales by adding features side by side rather than by growing shared 
 packages/api/
 ├─ src/
 │  ├─ index.ts                 entry point
-│  ├─ config.ts                env access (requireDatabaseUrl / requireRefreshToken)
+│  ├─ app.ts                   Elysia composition root
+│  ├─ config.ts                env access (requireDatabaseUrl)
 │  ├─ modules/                 one folder per FEATURE
 │  │  ├─ giveaways/
 │  │  │  ├─ index.ts
@@ -31,8 +32,8 @@ packages/api/
 │  │  │     ├─ prime-gaming/
 │  │  │     ├─ steam/
 │  │  │     ├─ gog/
-│  │  │     └─ gamerpower/
-│  │  ├─ notifications/
+│  │  │     └─ gamerpower/      [planned]
+│  │  ├─ notifications/         [planned]
 │  │  │  ├─ index.ts
 │  │  │  ├─ service.ts
 │  │  │  ├─ scheduler.ts
@@ -41,12 +42,12 @@ packages/api/
 │  │  │     ├─ shared.ts
 │  │  │     ├─ discord/
 │  │  │     └─ email/
-│  │  └─ subscriptions/
+│  │  └─ subscriptions/         [planned]
 │  │     ├─ index.ts
 │  │     ├─ service.ts
 │  │     ├─ model.ts
 │  │     └─ repository.ts
-│  ├─ db/                      SHARED INFRA (peer of utils/) — no feature data
+│  ├─ db/                      shared persistence infrastructure
 │  │  ├─ client.ts             lazy getDb() + Database type
 │  │  ├─ schema.ts             Drizzle tables (centralized, Drizzle convention)
 │  │  └─ testing.ts            in-memory PGlite factory for tests
@@ -60,15 +61,15 @@ packages/api/
 
 See [`giveaways-flow.md`](./giveaways-flow.md) for the read-through sequence diagram.
 
-`GET /giveaways*` is a **read-through cache** over **Postgres** (Drizzle ORM on Bun's native SQL driver). When
-the requested scope is fresh (fetched within `CACHE_TTL_HOURS`, 24h) the active cached rows
-(`free_until > now()`) are served directly; on a miss the read fetches live, **upserts** the result (keyed by
-`(store, id, locale, country)`, never deleted → the table doubles as history), records the fetch time in
-`giveaway_fetches`, and serves it. The `giveaway_fetches` marker is per `(store, locale, country)`, so a store
-fetched with zero giveaways is still "fresh" and served empty rather than re-fetched every request.
+`GET /giveaways*` is a **read-through cache** over **Postgres** (Drizzle ORM on Bun's native SQL driver).
+Freshness is tracked independently per `(store, locale, country)`, so aggregate reads fetch only stale stores.
+A successful refresh transaction deactivates the store's previous snapshot, upserts the latest rows as active,
+and advances its `giveaway_fetches` marker. Current results require `is_active` and `free_until > now()`;
+inactive rows retain lightweight first/last-seen history. An empty refresh therefore serves empty without
+re-fetching, while an upstream failure leaves the previous scope untouched but stale.
 
-`src/db/` holds only shared plumbing — connection and test factory — the same non-feature role as
-`utils/logger.ts`. Following Drizzle's default layout, table definitions are centralized in `src/db/schema.ts`
+`src/db/` holds shared persistence infrastructure: connection/test plumbing and centralized Drizzle table
+definitions. Following Drizzle's default layout, table definitions live in `src/db/schema.ts`
 and migrations are generated into `./drizzle` (`drizzle.config.ts` sets `schema: "./src/db/schema.ts"`,
 `out: "./drizzle"`); a new feature (e.g. `subscriptions/`) adds its table to `src/db/schema.ts` while keeping its
 own `repository.ts` + `model.ts` in its module. Migrations are applied with the `drizzle-kit migrate` CLI

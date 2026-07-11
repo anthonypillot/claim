@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 
 import { eq, sql } from "drizzle-orm";
 
@@ -11,11 +11,11 @@ import { createGiveaways } from "./index.ts";
 import {
   type AllGiveawaysResponse,
   CACHE_TTL_HOURS,
+  type Giveaway,
   GiveawaysQuerySchema,
   STORE_IDS,
-  type StoreGiveaway,
 } from "./model.ts";
-import { isFresh, markFetched, upsertGiveaways } from "./repository.ts";
+import { isFresh, refreshStore } from "./repository.ts";
 import { epicFreeGamesFixture } from "./stores/epic-games/fixtures.ts";
 import { gogGiveawaySectionFixtures, gogSectionsFixture } from "./stores/gog/fixtures.ts";
 import { primeFreeGamesFixture, primeHomeHtmlFixture } from "./stores/prime-gaming/fixtures.ts";
@@ -29,7 +29,8 @@ const STEAM_URL = "http://localhost/giveaways/steam";
 
 const MARKET_US = { locale: "en-US", country: "US" };
 
-let db: Awaited<ReturnType<typeof createTestDatabase>>;
+let context: Awaited<ReturnType<typeof createTestDatabase>>;
+let db: Awaited<ReturnType<typeof createTestDatabase>>["db"];
 let app: ReturnType<typeof createGiveaways>;
 let fetchSpy: ReturnType<typeof spyOn<typeof globalThis, "fetch">>;
 
@@ -63,18 +64,20 @@ async function stubUpstreamFetch(input: string | URL | Request): Promise<Respons
       headers: { "content-type": "application/json" },
     });
   }
-  return new Response(primeHomeHtmlFixture, {
-    headers: {
-      "content-type": "text/html",
-      "set-cookie": "session-id=test-session; Domain=.amazon.com; Path=/; Secure",
-    },
-  });
+  if (url.includes("luna.amazon.com/claims/home")) {
+    return new Response(primeHomeHtmlFixture, {
+      headers: {
+        "content-type": "text/html",
+        "set-cookie": "session-id=test-session; Domain=.amazon.com; Path=/; Secure",
+      },
+    });
+  }
+  throw new Error(`Unexpected upstream URL: ${url}`);
 }
 
 /** A minimal cached giveaway for seeding warm-cache assertions. */
-function cachedSteamGiveaway(): StoreGiveaway {
+function cachedSteamGiveaway(): Giveaway {
   return {
-    store: "steam",
     id: "100100",
     title: "Cached Steam Game",
     description: "",
@@ -86,8 +89,17 @@ function cachedSteamGiveaway(): StoreGiveaway {
   };
 }
 
+async function refreshMarket(steamGiveaways: Giveaway[] = []): Promise<void> {
+  await Promise.all(
+    STORE_IDS.map((store) =>
+      refreshStore(db, MARKET_US, store, store === "steam" ? steamGiveaways : []),
+    ),
+  );
+}
+
 beforeAll(async () => {
-  db = await createTestDatabase();
+  context = await createTestDatabase();
+  db = context.db;
   app = createGiveaways(() => db);
 });
 
@@ -104,6 +116,10 @@ afterEach(() => {
   fetchSpy.mockRestore();
 });
 
+afterAll(async () => {
+  await context.close();
+});
+
 describe("GiveawaysQuerySchema", () => {
   it("marks locale and country as optional (omittable, defaults applied at runtime)", () => {
     expect(GiveawaysQuerySchema.required).toBeUndefined();
@@ -111,6 +127,17 @@ describe("GiveawaysQuerySchema", () => {
 });
 
 describe("GET /giveaways (cold cache → live fallback)", () => {
+  it("returns a stable 500 body without exposing internal errors", async () => {
+    const failingApp = createGiveaways(() => {
+      throw new Error("database credentials leaked here");
+    });
+
+    const response = await failingApp.handle(new Request(ALL_URL));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "Internal server error" });
+  });
+
   it("merges every store's giveaways in store-declaration order", async () => {
     const response = await app.handle(new Request(ALL_URL));
 
@@ -206,12 +233,33 @@ describe("GET /giveaways (cold cache → live fallback)", () => {
     const response = await app.handle(new Request(`${ALL_URL}?locale=not!valid`));
 
     expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "Invalid request" });
   });
 
   it("rejects an invalid country with 422", async () => {
     const response = await app.handle(new Request(`${ALL_URL}?country=FRA`));
 
     expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "Invalid request" });
+  });
+
+  it("rejects a well-formed but unsupported market without calling upstreams", async () => {
+    const response = await app.handle(new Request(`${ALL_URL}?locale=de-DE&country=DE`));
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "Unsupported locale" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("canonicalizes case variants into the same cache scope", async () => {
+    const first = await app.handle(new Request(`${ALL_URL}?locale=EN-us&country=us`));
+    expect(first.status).toBe(200);
+    const callsAfterFirst = fetchSpy.mock.calls.length;
+
+    const second = await app.handle(new Request(`${ALL_URL}?locale=en-US&country=US`));
+
+    expect(second.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledTimes(callsAfterFirst);
   });
 });
 
@@ -220,18 +268,18 @@ describe("GET /giveaways (read-through cache)", () => {
     const first = await app.handle(new Request(ALL_URL));
     expect(first.status).toBe(200);
     expect(fetchSpy).toHaveBeenCalled(); // miss → live fetch + write
+    const firstBody = await first.json();
 
     const callsAfterFirst = fetchSpy.mock.calls.length;
     const second = await app.handle(new Request(ALL_URL));
 
     expect(second.status).toBe(200);
-    expect(((await second.json()) as AllGiveawaysResponse).count).toBe(4);
+    expect(await second.json()).toEqual(firstBody);
     expect(fetchSpy.mock.calls.length).toBe(callsAfterFirst); // served from cache, no re-fetch
   });
 
   it("serves active cached rows once every store is fresh, without hitting upstreams", async () => {
-    await upsertGiveaways(db, MARKET_US, [cachedSteamGiveaway()]);
-    await markFetched(db, MARKET_US, [...STORE_IDS]);
+    await refreshMarket([cachedSteamGiveaway()]);
     fetchSpy.mockClear();
 
     const response = await app.handle(new Request(ALL_URL));
@@ -248,8 +296,7 @@ describe("GET /giveaways (read-through cache)", () => {
   });
 
   it("serves empty (no re-fetch) when the market is fresh but nothing is active", async () => {
-    await markFetched(db, MARKET_US, [...STORE_IDS]);
-    await upsertGiveaways(db, MARKET_US, [
+    await refreshMarket([
       {
         ...cachedSteamGiveaway(),
         id: "expired",
@@ -266,9 +313,8 @@ describe("GET /giveaways (read-through cache)", () => {
   });
 
   it("re-fetches when a store's cache has passed the TTL", async () => {
-    await upsertGiveaways(db, MARKET_US, [cachedSteamGiveaway()]);
-    await markFetched(db, MARKET_US, [...STORE_IDS]);
-    // Age one store's marker past the TTL → the market is no longer all-fresh → miss.
+    await refreshMarket([cachedSteamGiveaway()]);
+    // Age one store's marker past the TTL; only that store should be refreshed.
     await db
       .update(giveawayFetchesTable)
       .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` })
@@ -279,6 +325,55 @@ describe("GET /giveaways (read-through cache)", () => {
 
     expect(response.status).toBe(200);
     expect(fetchSpy).toHaveBeenCalled();
+    expect(fetchSpy.mock.calls.every(([input]) => String(input).includes("sections.gog.com"))).toBe(
+      true,
+    );
+  });
+
+  it("serves fresh stores when the only stale store fails", async () => {
+    await refreshStore(db, MARKET_US, "epic-games", []);
+    await refreshStore(db, MARKET_US, "prime-gaming", []);
+    await refreshStore(db, MARKET_US, "steam", [cachedSteamGiveaway()]);
+    fetchSpy.mockImplementation(((input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("sections.gog.com")) return Promise.reject(new Error("network down"));
+      return stubUpstreamFetch(input);
+    }) as typeof fetch);
+
+    const response = await app.handle(new Request(ALL_URL));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      count: 1,
+      giveaways: [{ store: "steam", id: "100100" }],
+      errors: [{ store: "gog", error: "Failed to fetch giveaways from gog" }],
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("deactivates a giveaway omitted by a successful stale-store refresh", async () => {
+    await refreshMarket([cachedSteamGiveaway()]);
+    await db
+      .update(giveawayFetchesTable)
+      .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` })
+      .where(eq(giveawayFetchesTable.store, "steam"));
+    fetchSpy.mockImplementation(((input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("featuredcategories")) {
+        return Promise.resolve(new Response(JSON.stringify({ specials: { items: [] } })));
+      }
+      return stubUpstreamFetch(input);
+    }) as typeof fetch);
+
+    const response = await app.handle(new Request(ALL_URL));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ count: 0, giveaways: [], errors: [] });
+    const [historical] = await db
+      .select()
+      .from(giveawaysTable)
+      .where(eq(giveawaysTable.id, "100100"));
+    expect(historical?.isActive).toBe(false);
   });
 
   it("caches only the stores that succeeded on a partial-failure read", async () => {
@@ -314,7 +409,7 @@ describe("GET /giveaways (read-through cache)", () => {
 
   it("serves empty from cache for a fetched-but-empty store, without hitting the upstream", async () => {
     // A store fetched with zero giveaways (e.g. Steam with no promo) is served empty from cache, not re-fetched.
-    await markFetched(db, MARKET_US, ["steam"]);
+    await refreshStore(db, MARKET_US, "steam", []);
     fetchSpy.mockClear();
 
     const response = await app.handle(new Request(STEAM_URL));
@@ -483,8 +578,7 @@ describe("GET /giveaways/steam", () => {
   });
 
   it("serves from the cache once fresh", async () => {
-    await upsertGiveaways(db, MARKET_US, [cachedSteamGiveaway()]);
-    await markFetched(db, MARKET_US, ["steam"]);
+    await refreshStore(db, MARKET_US, "steam", [cachedSteamGiveaway()]);
     fetchSpy.mockClear();
 
     const response = await app.handle(new Request(STEAM_URL));

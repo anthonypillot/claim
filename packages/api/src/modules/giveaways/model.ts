@@ -3,13 +3,15 @@ import { t } from "elysia";
 /** Defaults applied when a request omits the query params; the single source of truth for both the schema and the resolver. */
 export const DEFAULT_LOCALE = "en-US";
 export const DEFAULT_COUNTRY = "US";
+export const SUPPORTED_LOCALES = ["en-US", "fr-FR"] as const;
+export const SUPPORTED_COUNTRIES = ["US", "FR"] as const;
 
 export const GiveawaysQuerySchema = t.Object({
   locale: t.Optional(
     t.String({
-      pattern: "^[a-z]{2}(-[A-Za-z]{2,4})?$",
+      pattern: "^[A-Za-z]{2}-[A-Za-z]{2}$",
       default: DEFAULT_LOCALE,
-      description: "BCP 47 language tag; drives title/description language",
+      description: `Supported locale (${SUPPORTED_LOCALES.join(", ")}); case-insensitive`,
       examples: ["en-US", "fr-FR"],
     }),
   ),
@@ -17,7 +19,7 @@ export const GiveawaysQuerySchema = t.Object({
     t.String({
       pattern: "^[A-Za-z]{2}$",
       default: DEFAULT_COUNTRY,
-      description: "ISO 3166-1 alpha-2 country; drives pricing currency and regional availability",
+      description: `Supported country (${SUPPORTED_COUNTRIES.join(", ")}); case-insensitive`,
       examples: ["FR", "US"],
     }),
   ),
@@ -26,11 +28,34 @@ export const GiveawaysQuerySchema = t.Object({
 /** A fully-resolved market (locale + country), both guaranteed present. */
 export type Market = { locale: string; country: string };
 
+export class UnsupportedMarketError extends Error {
+  constructor(readonly field: "locale" | "country") {
+    super(`Unsupported ${field}`);
+    this.name = "UnsupportedMarketError";
+  }
+}
+
+function isSupported<const Values extends readonly string[]>(
+  value: string,
+  values: Values,
+): value is Values[number] {
+  return values.includes(value);
+}
+
 /** Fills omitted query params with the documented defaults, yielding a fully-resolved market. */
 export function resolveMarket(query: typeof GiveawaysQuerySchema.static): Market {
+  let locale: string;
+  try {
+    [locale = DEFAULT_LOCALE] = Intl.getCanonicalLocales(query.locale ?? DEFAULT_LOCALE);
+  } catch {
+    throw new UnsupportedMarketError("locale");
+  }
+  const country = (query.country ?? DEFAULT_COUNTRY).toUpperCase();
+  if (!isSupported(locale, SUPPORTED_LOCALES)) throw new UnsupportedMarketError("locale");
+  if (!isSupported(country, SUPPORTED_COUNTRIES)) throw new UnsupportedMarketError("country");
   return {
-    locale: query.locale ?? DEFAULT_LOCALE,
-    country: query.country ?? DEFAULT_COUNTRY,
+    locale,
+    country,
   };
 }
 
@@ -110,8 +135,4 @@ export const ErrorResponseSchema = t.Object({
 export type Giveaway = typeof GiveawaySchema.static;
 export type GiveawayImages = typeof GiveawayImagesSchema.static;
 export type StoreGiveaway = typeof StoreGiveawaySchema.static;
-export type EpicGamesGiveawaysResponse = typeof EpicGamesGiveawaysResponseSchema.static;
-export type PrimeGamingGiveawaysResponse = typeof PrimeGamingGiveawaysResponseSchema.static;
-export type GogGiveawaysResponse = typeof GogGiveawaysResponseSchema.static;
-export type SteamGiveawaysResponse = typeof SteamGiveawaysResponseSchema.static;
 export type AllGiveawaysResponse = typeof AllGiveawaysResponseSchema.static;

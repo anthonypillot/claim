@@ -122,8 +122,39 @@ describe("fetchFreeGames", () => {
     );
   });
 
+  it("throws UpstreamError when a featured element is malformed", async () => {
+    stubFetch({ featured: () => jsonResponse({ specials: { items: [null] } }) });
+
+    await expect(fetchFreeGames({ locale: "en-US", country: "US" })).rejects.toThrow(
+      "unexpected upstream response shape",
+    );
+  });
+
   it("throws UpstreamError when the confirm response has no store items", async () => {
     stubFetch({ items: () => jsonResponse({}) });
+
+    await expect(fetchFreeGames({ locale: "en-US", country: "US" })).rejects.toThrow(
+      "unexpected upstream response shape",
+    );
+  });
+
+  it("throws UpstreamError when a confirm element is malformed", async () => {
+    stubFetch({ items: () => jsonResponse({ response: { store_items: [null] } }) });
+
+    await expect(fetchFreeGames({ locale: "en-US", country: "US" })).rejects.toThrow(
+      "unexpected upstream response shape",
+    );
+  });
+
+  it("throws UpstreamError when a mapped purchase field is malformed", async () => {
+    stubFetch({
+      items: () =>
+        jsonResponse({
+          response: {
+            store_items: [{ appid: 100100, best_purchase_option: { final_price_in_cents: null } }],
+          },
+        }),
+    });
 
     await expect(fetchFreeGames({ locale: "en-US", country: "US" })).rejects.toThrow(
       "unexpected upstream response shape",

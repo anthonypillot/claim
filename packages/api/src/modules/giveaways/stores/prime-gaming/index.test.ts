@@ -121,6 +121,36 @@ describe("fetchFreeGames", () => {
     );
   });
 
+  it("throws UpstreamError when an item element is malformed", async () => {
+    stubFetch({ graphql: () => graphqlResponse({ data: { games: { items: [null] } } }) });
+
+    await expect(fetchFreeGames({ locale: "en-US", country: "US" })).rejects.toThrow(
+      "unexpected upstream response shape",
+    );
+  });
+
+  it("throws UpstreamError when a mapped nested field is malformed", async () => {
+    stubFetch({
+      graphql: () =>
+        graphqlResponse({ data: { games: { items: [{ id: "bad", assets: { title: 123 } }] } } }),
+    });
+
+    await expect(fetchFreeGames({ locale: "en-US", country: "US" })).rejects.toThrow(
+      "unexpected upstream response shape",
+    );
+  });
+
+  it("extracts the csrf token regardless of attribute order", async () => {
+    stubFetch({
+      home: () => homeResponse('<input value="reversed-token" data-extra="x" name="csrf-key">'),
+    });
+
+    await fetchFreeGames({ locale: "en-US", country: "US" });
+
+    const headers = new Headers(fetchSpy.mock.calls[1]?.[1]?.headers);
+    expect(headers.get("csrf-token")).toBe("reversed-token");
+  });
+
   it("throws UpstreamError surfacing the graphql error message", async () => {
     stubFetch({
       graphql: () =>

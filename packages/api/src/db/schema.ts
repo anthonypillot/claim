@@ -1,9 +1,18 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 
 // Drizzle table for persisted giveaways — the feature owns its own storage schema, paralleling the
-// TypeBox API schema in `model.ts`. One row per (store, id, locale, country); rows are upserted on refresh
-// and never deleted, so the table doubles as history (see `repository.ts`).
+// TypeBox API schema in `model.ts`. One row per (store, id, locale, country); omitted rows become inactive
+// rather than being deleted, so first/last-seen timestamps retain lightweight history.
 
 const seenAt = { withTimezone: true, mode: "date" } as const;
 
@@ -25,15 +34,16 @@ export const giveaways = pgTable(
     priceFormatted: text("price_formatted"),
     priceCurrency: text("price_currency"),
     freeUntil: timestamp("free_until", seenAt).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
     firstSeenAt: timestamp("first_seen_at", seenAt).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", seenAt).notNull().defaultNow(),
-    fetchedAt: timestamp("fetched_at", seenAt).notNull().defaultNow(),
   },
   (table) => [
     primaryKey({ columns: [table.store, table.id, table.locale, table.country] }),
-    index("giveaways_locale_country_free_until_idx").on(
+    index("giveaways_locale_country_active_free_until_idx").on(
       table.locale,
       table.country,
+      table.isActive,
       table.freeUntil,
     ),
     // Price is an all-or-nothing group: either the store exposes a full price or none at all.

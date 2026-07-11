@@ -35,6 +35,17 @@ function toGiveaway(offer: EpicOffer, freeUntil: string, locale: string): Giveaw
     offer.productSlug ??
     null;
   const totalPrice = offer.price?.totalPrice;
+  const price =
+    totalPrice &&
+    typeof totalPrice.originalPrice === "number" &&
+    totalPrice.fmtPrice?.originalPrice &&
+    totalPrice.currencyCode
+      ? {
+          original: totalPrice.originalPrice,
+          formatted: totalPrice.fmtPrice.originalPrice,
+          currency: totalPrice.currencyCode,
+        }
+      : null;
   return {
     id: offer.id,
     title: offer.title,
@@ -42,11 +53,7 @@ function toGiveaway(offer: EpicOffer, freeUntil: string, locale: string): Giveaw
     url: pageSlug ? `https://store.epicgames.com/${locale}/p/${pageSlug}` : null,
     images: toImages(offer.keyImages),
     seller: offer.seller?.name ?? "Unknown",
-    price: {
-      original: totalPrice?.originalPrice ?? 0,
-      formatted: totalPrice?.fmtPrice?.originalPrice ?? "",
-      currency: totalPrice?.currencyCode ?? "",
-    },
+    price,
     freeUntil,
   };
 }

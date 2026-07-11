@@ -25,15 +25,23 @@ export const primeFreeGamesFixture: PrimeFreeGamesResponse = {
           offers: [{ startTime: "2000-01-01T00:00:00Z", endTime: "2099-12-31T00:00:00Z" }],
           game: { assets: { title: "Actually Free Full Game", publisher: "WayForward" } },
         },
-        // (b) in-game loot with an active window — filtered by the FGWP/category flags
+        // (b) full game with an active window — filtered only by the FGWP flag
         {
           id: "item-loot-drop",
           isFGWP: false,
-          category: "IN_GAME_CONTENT",
+          category: "FULL_GAME",
           assets: { title: "Loot Drop" },
           offers: [{ startTime: "2000-01-01T00:00:00Z", endTime: "2099-12-31T00:00:00Z" }],
         },
-        // (c) full game whose offer window has expired — filtered by dates
+        // (c) FGWP item with an active window — filtered only by category
+        {
+          id: "item-wrong-category",
+          isFGWP: true,
+          category: "IN_GAME_CONTENT",
+          assets: { title: "Wrong Category" },
+          offers: [{ startTime: "2000-01-01T00:00:00Z", endTime: "2099-12-31T00:00:00Z" }],
+        },
+        // (d) full game whose offer window has expired — filtered by dates
         {
           id: "item-expired-full-game",
           isFGWP: true,
@@ -41,7 +49,7 @@ export const primeFreeGamesFixture: PrimeFreeGamesResponse = {
           assets: { title: "Formerly Free Game" },
           offers: [{ startTime: "2000-01-01T00:00:00Z", endTime: "2001-01-01T00:00:00Z" }],
         },
-        // (d) full game whose offer window hasn't started — filtered by dates
+        // (e) full game whose offer window hasn't started — filtered by dates
         {
           id: "item-upcoming-full-game",
           isFGWP: true,
@@ -49,7 +57,7 @@ export const primeFreeGamesFixture: PrimeFreeGamesResponse = {
           assets: { title: "Upcoming Free Game" },
           offers: [{ startTime: "2098-01-01T00:00:00Z", endTime: "2099-01-01T00:00:00Z" }],
         },
-        // (e) full game with no usable end date — filtered by the missing-endTime branch
+        // (f) full game with no usable end date — filtered by the missing-endTime branch
         {
           id: "item-endless-full-game",
           isFGWP: true,

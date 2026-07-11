@@ -22,7 +22,7 @@ Or from this package directory:
 bun run dev            # hot-reload
 bun test               # run tests
 bun run build          # production bundle → build/index.js
-bun run start          # run the bundle (NODE_ENV=production, cluster mode)
+bun run start          # run the bundle (NODE_ENV=production)
 ```
 
 ## Database
@@ -30,6 +30,9 @@ bun run start          # run the bundle (NODE_ENV=production, cluster mode)
 `GET /giveaways*` is a **read-through cache** over Postgres: on a miss it fetches live, writes the result to the
 DB, and serves it; subsequent reads within the TTL (`CACHE_TTL_HOURS`, 24h) are served from the DB. Set
 `DATABASE_URL` before running the server or migrations.
+
+Supported locales are `en-US` and `fr-FR`; supported countries are `US` and `FR`. Inputs are
+case-insensitive and canonicalized before they become cache keys.
 
 Spin up a local Postgres and apply the schema:
 
@@ -47,11 +50,11 @@ curl localhost:3000/giveaways          # cold: fetches live + caches
 curl localhost:3000/giveaways          # warm: served from the cache
 ```
 
-Schema changes: edit a feature's `schema.ts` (e.g. `src/modules/giveaways/schema.ts`), then
-`bun run db:generate` to produce a new migration under `src/database/migrations/` and **commit it**.
+Schema changes: edit `src/db/schema.ts`, then run `bun run db:generate` to produce a migration under
+`drizzle/` and **commit it**.
 
 > Deploy note: `bun build` bundles JavaScript only, not the `.sql` migration files. Run `bun run db:migrate`
-> from source at deploy time (it reads `src/database/migrations/` relative to the source file); don't try to
+> from source at deploy time (drizzle-kit reads the committed `drizzle/` directory); don't try to
 > migrate from the `build/` bundle. `drizzle-kit` and PGlite are dev-only and never enter the bundle.
 
 ## Where to look

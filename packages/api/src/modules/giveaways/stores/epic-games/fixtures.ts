@@ -36,7 +36,6 @@ export const epicFreeGamesFixture: EpicFreeGamesResponse = {
                   ],
                 },
               ],
-              upcomingPromotionalOffers: [],
             },
           },
           // (b) free-priced ADD_ON with an active window — filtered by offerType
@@ -56,7 +55,7 @@ export const epicFreeGamesFixture: EpicFreeGamesResponse = {
               ],
             },
           },
-          // (c) paid BASE_GAME, no promotions — filtered by price
+          // (c) paid BASE_GAME with an active window — filtered only by price
           {
             id: "offer-paid-base-game",
             title: "Paid Game",
@@ -65,7 +64,15 @@ export const epicFreeGamesFixture: EpicFreeGamesResponse = {
             price: {
               totalPrice: { discountPrice: 1999, originalPrice: 1999, currencyCode: "EUR" },
             },
-            promotions: null,
+            promotions: {
+              promotionalOffers: [
+                {
+                  promotionalOffers: [
+                    { startDate: "2000-01-01T00:00:00.000Z", endDate: "2099-12-31T00:00:00.000Z" },
+                  ],
+                },
+              ],
+            },
           },
           // (d) free-priced BASE_GAME with only an upcoming promo — no active window
           {
@@ -75,8 +82,7 @@ export const epicFreeGamesFixture: EpicFreeGamesResponse = {
             offerType: "BASE_GAME",
             price: { totalPrice: { discountPrice: 0, originalPrice: 2999, currencyCode: "EUR" } },
             promotions: {
-              promotionalOffers: [],
-              upcomingPromotionalOffers: [
+              promotionalOffers: [
                 {
                   promotionalOffers: [
                     { startDate: "2098-01-01T00:00:00.000Z", endDate: "2099-01-01T00:00:00.000Z" },

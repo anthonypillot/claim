@@ -119,4 +119,30 @@ describe("fetchFreeGames", () => {
       "unexpected upstream response shape",
     );
   });
+
+  it("throws UpstreamError when a section element is malformed", async () => {
+    stubFetch({ page: () => jsonResponse({ sections: [null] }) });
+
+    await expect(fetchFreeGames({ locale: "en-US", country: "US" })).rejects.toThrow(
+      "unexpected upstream response shape",
+    );
+  });
+
+  it("throws UpstreamError when a mapped product field is malformed", async () => {
+    stubFetch({
+      page: () =>
+        jsonResponse({ sections: [{ sectionId: "bad", sectionType: "GIVEAWAY_SECTION" }] }),
+      section: () =>
+        jsonResponse({
+          properties: {
+            endDate: "2099-12-31T00:00:00Z",
+            product: { id: "bad", title: "Bad", coverHorizontal: 123 },
+          },
+        }),
+    });
+
+    await expect(fetchFreeGames({ locale: "en-US", country: "US" })).rejects.toThrow(
+      "unexpected upstream response shape",
+    );
+  });
 });

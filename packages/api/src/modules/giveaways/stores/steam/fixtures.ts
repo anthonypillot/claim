@@ -2,14 +2,13 @@ import type { SteamFeaturedCategoriesResponse, SteamGetItemsResponse } from "./t
 
 // Trimmed upstream-shaped payloads: the featured "specials" list plus the store-browse
 // confirmation. Only (a) "Actually Free Steam Game" survives both the discovery filter and the
-// confirm predicate. `discount_expiration`/`discount_end_date` far in the future keeps (a) live.
+// confirm predicate. `discount_end_date` far in the future keeps (a) live.
 export const steamFeaturedCategoriesFixture: SteamFeaturedCategoriesResponse = {
   specials: {
     items: [
       // (a) 100% off with a zero final price — the one expected result
       {
         id: 100100,
-        type: 0,
         name: "Actually Free Steam Game",
         discount_percent: 100,
         original_price: 1999,
@@ -17,42 +16,46 @@ export const steamFeaturedCategoriesFixture: SteamFeaturedCategoriesResponse = {
         currency: "USD",
         header_image: "https://shared.akamai.steamstatic.com/apps/100100/header.jpg",
         small_capsule_image: "https://shared.akamai.steamstatic.com/apps/100100/capsule.jpg",
-        discount_expiration: 4102444800,
       },
-      // (b) merely discounted, not free — dropped at discovery, never confirmed
+      // (b) less than 100% off — dropped only by the percentage check
       {
         id: 200200,
-        type: 0,
         name: "Half Off Game",
         discount_percent: 50,
+        original_price: 1999,
+        final_price: 0,
+        currency: "USD",
+      },
+      // (c) 100% off with a non-zero final price — dropped only by the final-price check
+      {
+        id: 250250,
+        name: "Not Actually Free Game",
+        discount_percent: 100,
         original_price: 1999,
         final_price: 999,
         currency: "USD",
       },
-      // (c) 100% off but actually free-to-play — passes discovery, dropped by the is_free branch
+      // (d) 100% off but actually free-to-play — passes discovery, dropped by the is_free branch
       {
         id: 300300,
-        type: 0,
         name: "Free To Play Game",
         discount_percent: 100,
         original_price: 0,
         final_price: 0,
         currency: "USD",
       },
-      // (d) 100% off but the promo has ended — passes discovery, dropped by the window branch
+      // (e) 100% off but the promo has ended — passes discovery, dropped by the window branch
       {
         id: 400400,
-        type: 0,
         name: "Expired Promo Game",
         discount_percent: 100,
         original_price: 999,
         final_price: 0,
         currency: "USD",
       },
-      // (e) 100% off but the confirm carries no purchase option — dropped by the missing-option branch
+      // (f) 100% off but the confirm carries no purchase option — dropped by the missing-option branch
       {
         id: 500500,
-        type: 0,
         name: "No Purchase Option Game",
         discount_percent: 100,
         original_price: 1499,
@@ -74,19 +77,24 @@ export const steamGetItemsFixture: SteamGetItemsResponse = {
         best_purchase_option: {
           discount_pct: 100,
           final_price_in_cents: "0",
-          original_price_in_cents: "1999",
           formatted_original_price: "$19.99",
           active_discounts: [{ discount_end_date: 4102444800 }],
         },
       },
-      // (c) free-to-play — dropped by the is_free branch
+      // (d) free-to-play with an otherwise valid promo — dropped only by the is_free branch
       {
         appid: 300300,
         name: "Free To Play Game",
         is_free: true,
         store_url_path: "app/300300/Free_To_Play_Game",
+        best_purchase_option: {
+          discount_pct: 100,
+          final_price_in_cents: "0",
+          formatted_original_price: "$0.00",
+          active_discounts: [{ discount_end_date: 4102444800 }],
+        },
       },
-      // (d) discount already ended — dropped by the window branch
+      // (e) discount already ended — dropped by the window branch
       {
         appid: 400400,
         name: "Expired Promo Game",
@@ -94,12 +102,11 @@ export const steamGetItemsFixture: SteamGetItemsResponse = {
         best_purchase_option: {
           discount_pct: 100,
           final_price_in_cents: "0",
-          original_price_in_cents: "999",
           formatted_original_price: "$9.99",
           active_discounts: [{ discount_end_date: 946684800 }],
         },
       },
-      // (e) no purchase option — dropped by the missing-option branch
+      // (f) no purchase option — dropped by the missing-option branch
       {
         appid: 500500,
         name: "No Purchase Option Game",
