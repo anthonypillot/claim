@@ -3,6 +3,7 @@ import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 
 import { createGiveaways } from "./modules/giveaways/index.ts";
+import { type CheckReadiness, createHealth } from "./modules/health/index.ts";
 import { createLogger } from "./utils/logger.ts";
 
 const log = createLogger("http");
@@ -13,6 +14,10 @@ export type AppMetadata = {
   description: string;
 };
 
+export type AppDependencies = {
+  checkReadiness?: CheckReadiness;
+};
+
 // Capitalize the raw package name and suffix it, e.g. "claim" -> "Claim API".
 export function formatApiName(rawName: string): string {
   return rawName.charAt(0).toUpperCase() + rawName.slice(1) + " API";
@@ -21,7 +26,7 @@ export function formatApiName(rawName: string): string {
 // Compose the Elysia application without binding a port, so it can be exercised via
 // `buildApp(...).handle(new Request(...))` in tests. The server bootstrap (`.listen()`)
 // lives in `index.ts`.
-export function buildApp(metadata: AppMetadata) {
+export function buildApp(metadata: AppMetadata, dependencies: AppDependencies = {}) {
   const displayName = formatApiName(metadata.name);
 
   return new Elysia()
@@ -34,7 +39,10 @@ export function buildApp(metadata: AppMetadata) {
             version: metadata.version,
             description: "Read-only JSON API aggregating free game giveaways across storefronts.",
           },
-          tags: [{ name: "giveaways", description: "Currently-free games, per store" }],
+          tags: [
+            { name: "health", description: "Application liveness and readiness" },
+            { name: "giveaways", description: "Currently-free games, per store" },
+          ],
         },
       }),
     )
@@ -49,5 +57,6 @@ export function buildApp(metadata: AppMetadata) {
       version: metadata.version,
       description: metadata.description,
     }))
+    .use(createHealth(dependencies.checkReadiness))
     .use(createGiveaways());
 }
