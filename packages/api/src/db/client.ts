@@ -1,6 +1,9 @@
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { requireDatabaseUrl } from "../config.ts";
+import { createLogger } from "../utils/logger.ts";
+
+const log = createLogger("database");
 
 // Shared Postgres connection for every feature. No `schema` option is passed: the repositories use core
 // queries (`db.select().from(table)`, `db.insert(table)`, `db.$count`) that reference table objects
@@ -8,6 +11,7 @@ import { requireDatabaseUrl } from "../config.ts";
 // importing any feature code. drizzle-kit discovers tables via the `./src/modules/**/schema.ts` glob instead.
 
 function create() {
+  log.info("initializing database client");
   return drizzle(requireDatabaseUrl());
 }
 

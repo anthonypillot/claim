@@ -8,3 +8,12 @@ export const logger = pino({
   // production bundle never depends on it.
   ...(isProduction ? {} : { transport: { target: "pino-pretty", options: { colorize: true } } }),
 });
+
+/**
+ * A logger whose every message is prefixed with an uppercase `[LOCATION]` tag (e.g. `[GIVEAWAYS
+ * SERVICE]`) so a log line's origin is obvious when tracing issues. Pass the location in natural
+ * case — the bracketing and uppercasing live here so call sites never format the prefix themselves.
+ */
+export function createLogger(location: string) {
+  return logger.child({}, { msgPrefix: `[${location.toUpperCase()}] ` });
+}

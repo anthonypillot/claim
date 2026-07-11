@@ -2,7 +2,7 @@ import { Elysia } from "elysia";
 
 import type { Database } from "../../db/client.ts";
 import { getDb } from "../../db/client.ts";
-import { logger } from "../../utils/logger.ts";
+import { createLogger } from "../../utils/logger.ts";
 import {
   AllGiveawaysResponseSchema,
   EpicGamesGiveawaysResponseSchema,
@@ -15,6 +15,8 @@ import {
 import { getAllFreeGamesCached, getStoreFreeGamesCached } from "./service.ts";
 import { UpstreamError } from "./stores/shared.ts";
 
+const log = createLogger("giveaways routes");
+
 /**
  * The giveaways plugin. `getDatabase` is injected (defaulting to the shared client) so tests can supply an
  * in-memory database; it is resolved per request and never at construction, keeping `buildApp` IO-free.
@@ -24,7 +26,7 @@ export function createGiveaways(getDatabase: () => Database = getDb) {
     .error({ UPSTREAM_ERROR: UpstreamError })
     .onError(({ code, error, status }) => {
       if (code === "UPSTREAM_ERROR") {
-        logger.error({ store: error.store, err: error }, "upstream fetch failed");
+        log.error({ store: error.store, err: error }, "upstream fetch failed");
         return status(502, { error: `Failed to fetch giveaways from ${error.store}` });
       }
     })

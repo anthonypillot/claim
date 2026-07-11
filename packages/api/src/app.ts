@@ -3,7 +3,9 @@ import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 
 import { createGiveaways } from "./modules/giveaways/index.ts";
-import { logger } from "./utils/logger.ts";
+import { createLogger } from "./utils/logger.ts";
+
+const log = createLogger("http");
 
 export type AppMetadata = {
   name: string;
@@ -37,7 +39,7 @@ export function buildApp(metadata: AppMetadata) {
       }),
     )
     .onAfterResponse(({ request, set }) => {
-      logger.info(
+      log.info(
         { method: request.method, path: new URL(request.url).pathname, status: set.status },
         "request completed",
       );

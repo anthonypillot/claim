@@ -1,9 +1,12 @@
+import { createLogger } from "../../../../utils/logger.ts";
 import { UpstreamError } from "../shared.ts";
 import type {
   SteamCandidate,
   SteamFeaturedCategoriesResponse,
   SteamGetItemsResponse,
 } from "./types.ts";
+
+const log = createLogger("steam store");
 
 // Steam has no giveaways API. Free-to-keep promos surface as 100%-off "specials": discover
 // candidates from the store's featured-categories JSON, then confirm each via the store-browse
@@ -58,6 +61,7 @@ export async function fetchFreeToKeep(options: {
   country: string;
 }): Promise<SteamCandidate[]> {
   const language = steamLanguage(options.locale);
+  log.debug({ locale: options.locale, country: options.country }, "fetching free games");
 
   const featuredUrl = new URL(FEATURED_URL);
   featuredUrl.searchParams.set("cc", options.country);
@@ -74,6 +78,7 @@ export async function fetchFreeToKeep(options: {
   const candidates = specials.filter(
     (item) => item.discount_percent === 100 && item.final_price === 0,
   );
+  log.debug({ count: candidates.length }, "received free-to-keep candidates");
   if (candidates.length === 0) return [];
 
   const itemsUrl = new URL(GET_ITEMS_URL);

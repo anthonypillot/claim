@@ -1,5 +1,5 @@
 import type { Database } from "../../db/client.ts";
-import { logger } from "../../utils/logger.ts";
+import { createLogger } from "../../utils/logger.ts";
 import type {
   AllGiveawaysResponse,
   EpicGamesGiveawaysResponse,
@@ -26,6 +26,8 @@ import { fetchFreeGames as fetchPrimeGamingGiveaways } from "./stores/prime-gami
 import { fetchFreeGames as fetchSteamGiveaways } from "./stores/steam/index.ts";
 import type { FetchFreeGames } from "./stores/shared.ts";
 import { UpstreamError } from "./stores/shared.ts";
+
+const log = createLogger("giveaways service");
 
 /** Non-HTTP entry point to the feature (reused later by e.g. the notifications digest). */
 export async function getEpicGamesFreeGames(options: {
@@ -77,6 +79,7 @@ export async function getAllFreeGames(options: {
   locale: string;
   country: string;
 }): Promise<AllGiveawaysResponse> {
+  log.debug({ stores: STORE_IDS.length, ...options }, "fetching from all stores");
   const results = await Promise.all(
     STORE_IDS.map(async (store): Promise<StoreResult> => {
       try {
@@ -104,7 +107,7 @@ export async function getAllFreeGames(options: {
     });
   }
   for (const failure of failures) {
-    logger.error({ store: failure.store, err: failure.error }, "upstream fetch failed");
+    log.error({ store: failure.store, err: failure.error }, "upstream fetch failed");
   }
 
   return {
@@ -135,15 +138,18 @@ export async function getAllFreeGamesCached(
     const giveaways = (await findActiveGiveaways(db, options))
       .map(toStoreGiveaway)
       .toSorted(byStoreThenId);
+    log.debug({ ...options, count: giveaways.length }, "market fresh, serving cached");
     return { count: giveaways.length, giveaways, errors: [] };
   }
 
+  log.debug(options, "market stale, fetching live");
   const result = await getAllFreeGames(options);
   await upsertGiveaways(db, options, result.giveaways);
   const succeeded = STORE_IDS.filter(
     (store) => !result.errors.some((entry) => entry.store === store),
   );
   await markFetched(db, options, succeeded);
+  log.info({ ...options, count: result.count, stores: succeeded }, "cached live giveaways");
   return result;
 }
 
@@ -156,9 +162,11 @@ export async function getStoreFreeGamesCached<Store extends StoreId>(
   if (await isFresh(db, { ...options, store })) {
     const rows = await findActiveGiveaways(db, { ...options, store });
     const giveaways = rows.map(toGiveaway).toSorted((a, b) => a.id.localeCompare(b.id));
+    log.debug({ store, ...options, count: giveaways.length }, "store fresh, serving cached");
     return { store, count: giveaways.length, giveaways };
   }
 
+  log.debug({ store, ...options }, "store stale, fetching live");
   const giveaways = await storeFetchers[store](options);
   await upsertGiveaways(
     db,
@@ -166,5 +174,6 @@ export async function getStoreFreeGamesCached<Store extends StoreId>(
     giveaways.map((giveaway) => ({ ...giveaway, store })),
   );
   await markFetched(db, options, [store]);
+  log.info({ store, ...options, count: giveaways.length }, "cached live store giveaways");
   return { store, count: giveaways.length, giveaways };
 }

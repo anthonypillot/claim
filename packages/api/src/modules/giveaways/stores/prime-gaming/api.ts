@@ -1,5 +1,8 @@
+import { createLogger } from "../../../../utils/logger.ts";
 import { UpstreamError } from "../shared.ts";
 import type { PrimeFreeGamesResponse, PrimeItem } from "./types.ts";
+
+const log = createLogger("prime gaming store");
 
 // Prime Gaming has no public API. Its home page (served under the Luna domain since the two
 // merged) hands out anonymous session cookies and embeds a CSRF token that together unlock the
@@ -79,6 +82,7 @@ export async function fetchFreeGamesItems(options: {
   locale: string;
   country: string;
 }): Promise<PrimeItem[]> {
+  log.debug({ locale: options.locale, country: options.country }, "fetching free games");
   let body: PrimeFreeGamesResponse;
   try {
     const { cookie, csrfToken } = await fetchSession();
@@ -119,5 +123,6 @@ export async function fetchFreeGamesItems(options: {
     throw new UpstreamError(STORE, "unexpected upstream response shape");
   }
 
+  log.debug({ count: items.length }, "received items");
   return items;
 }

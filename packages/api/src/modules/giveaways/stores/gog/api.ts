@@ -1,5 +1,8 @@
+import { createLogger } from "../../../../utils/logger.ts";
 import { UpstreamError } from "../shared.ts";
 import type { GogGiveawaySection, GogSectionsResponse } from "./types.ts";
+
+const log = createLogger("gog store");
 
 // GOG giveaways only surface as a banner on the store home page; `2f` is that page's id in the
 // unauthenticated sections API backing it. No GIVEAWAY_SECTION means no giveaway is running.
@@ -33,6 +36,7 @@ export async function fetchGiveawaySections(options: {
 }): Promise<GogGiveawaySection[]> {
   const pageUrl = new URL(GOG_PAGE_URL);
   pageUrl.searchParams.set("locale", options.locale);
+  log.debug({ locale: options.locale, country: options.country }, "fetching free games");
   const body = await fetchJson<GogSectionsResponse>(pageUrl);
 
   if (!Array.isArray(body.sections)) {
@@ -43,6 +47,7 @@ export async function fetchGiveawaySections(options: {
     .filter((section) => section.sectionType === GIVEAWAY_SECTION_TYPE)
     .flatMap((section) => (section.sectionId ? [section.sectionId] : []));
 
+  log.debug({ count: giveawaySectionIds.length }, "received giveaway sections");
   return Promise.all(
     giveawaySectionIds.map((sectionId) => {
       const sectionUrl = new URL(`${GOG_PAGE_URL}/sections/${sectionId}`);
