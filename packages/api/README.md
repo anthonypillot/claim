@@ -1,81 +1,18 @@
 # Claim API
 
-The HTTP API for [Claim](../../README.md) — a small, read-only JSON API that serves free
-game giveaways aggregated across storefronts (Epic Games, Amazon Prime Gaming, GOG, and Steam today).
+This package contains Claim's Bun and Elysia HTTP API.
 
-Built with **Bun**, **Elysia**, **TypeBox**, **pino**, and **Drizzle ORM** on **Postgres** (giveaways are
-cached and served from the database; see [Database](#database)).
+The [root README](../../README.md) is the canonical guide for API endpoints, local setup,
+configuration, migrations, Docker, published images, and development commands.
 
-## Run it
+When the API is running, use `/openapi` for the interactive contract and `/openapi/json` for its
+OpenAPI document.
 
-From the repo root (preferred — root scripts fan out to the workspace):
-
-```bash
-bun install
-cp packages/api/.env.example packages/api/.env   # then fill in DATABASE_URL
-bun run dev      # hot-reload → http://localhost:3000
-```
-
-Or from this package directory:
+From this package directory, package-local scripts remain available:
 
 ```bash
-bun run dev            # hot-reload
-bun test               # run tests
-bun run build          # production bundle → build/index.js
-bun run start          # run the bundle (NODE_ENV=production)
+bun run dev
+bun test
+bun run build
+bun run start
 ```
-
-## Docker
-
-Build from the repository root so Bun can install the complete workspace:
-
-```bash
-docker build --file packages/api/Dockerfile --tag claim-api .
-```
-
-## Database
-
-`GET /giveaways*` is a **read-through cache** over Postgres: on a miss it fetches live, writes the result to the
-DB, and serves it; subsequent reads within the TTL (`CACHE_TTL_HOURS`, 24h) are served from the DB. Set
-`DATABASE_URL` before running the server or migrations.
-
-Supported locales are `en-US` and `fr-FR`; supported countries are `US` and `FR`. Inputs are
-case-insensitive and canonicalized before they become cache keys.
-
-Spin up a local Postgres and apply the schema:
-
-```bash
-docker run --rm -e POSTGRES_PASSWORD=claim -p 5432:5432 postgres:17
-export DATABASE_URL=postgres://postgres:claim@localhost:5432/postgres
-
-bun run db:migrate     # apply committed migrations (run from packages/api)
-```
-
-Then just read — the first call fetches and caches, the next is served from the DB:
-
-```bash
-curl localhost:3000/giveaways          # cold: fetches live + caches
-curl localhost:3000/giveaways          # warm: served from the cache
-```
-
-Schema changes: edit `src/db/schema.ts`, then run `bun run db:generate` to produce a migration under
-`drizzle/` and **commit it**.
-
-> Deploy note: `bun build` bundles JavaScript only, not the `.sql` migration files. Run `bun run db:migrate`
-> from source at deploy time (drizzle-kit reads the committed `drizzle/` directory); don't try to
-> migrate from the `build/` bundle. `drizzle-kit` and PGlite are dev-only and never enter the bundle.
-
-## Where to look
-
-- **API contract** (endpoints, params, response shape) — the live OpenAPI spec at `/openapi`
-  (`/openapi/json`).
-- **What Claim does & where it's headed** — [`docs/roadmap.md`](../../docs/roadmap.md).
-- **Architecture** (file tree, feature-based layout) —
-  [`docs/architecture.md`](../../docs/architecture.md).
-- **Conventions & pitfalls** (strict TypeScript, testing patterns) —
-  [`AGENTS.md`](../../AGENTS.md).
-
-## Layout
-
-The annotated file tree and the feature-based layout live in
-[`docs/architecture.md`](../../docs/architecture.md).
