@@ -40,7 +40,6 @@ When current product-specific behavior, configuration, or API guidance is needed
 - Oxc (Oxlint and Oxfmt): https://oxc.rs/llms.txt
 - Elysia (HTTP framework and TypeBox integration): https://elysiajs.com/llms.txt
 - Drizzle ORM (schema, migrations, and queries): https://orm.drizzle.team/llms.txt
-- Dokploy (deployment): https://docs.dokploy.com/llms.txt
 
 ## Architecture
 
