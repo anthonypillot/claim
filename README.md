@@ -30,7 +30,7 @@ docker run --detach --rm --name claim-postgres \
   --publish 5432:5432 \
   postgres:18-alpine
 
-bun --cwd packages/api run db:migrate
+bun run --cwd packages/api db:migrate
 bun run dev
 ```
 

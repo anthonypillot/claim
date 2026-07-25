@@ -50,7 +50,7 @@ docker run --detach --rm --name claim-postgres \
   postgres:18-alpine
 until docker exec claim-postgres pg_isready --username=postgres --dbname=claim; do sleep 1; done
 
-bun --cwd packages/api run db:migrate
+bun run --cwd packages/api db:migrate
 bun run dev
 ```
 
@@ -90,10 +90,10 @@ Run migration commands from the repository root with the API package as the work
 
 ```bash
 # After changing the schema, review and commit the generated migration.
-bun --cwd packages/api run db:generate
+bun run --cwd packages/api db:generate
 
 # Apply committed migrations from source.
-bun --cwd packages/api run db:migrate
+bun run --cwd packages/api db:migrate
 ```
 
 The production bundle deliberately excludes migration SQL and development-only tools. Apply
