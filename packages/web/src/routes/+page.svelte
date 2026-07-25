@@ -2,6 +2,7 @@
   import { AlertCircleIcon, GiftIcon } from "@hugeicons/core-free-icons";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import GiveawayCard from "$lib/components/giveaway-card.svelte";
+  import ThemeToggle from "$lib/components/theme-toggle.svelte";
   import * as Alert from "$lib/components/ui/alert";
   import { Badge } from "$lib/components/ui/badge";
   import * as Empty from "$lib/components/ui/empty";
@@ -20,19 +21,22 @@
 </svelte:head>
 
 <main class="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-10 px-5 py-12 sm:px-8 lg:py-16">
-  <header class="flex flex-col items-start gap-5 border-b pb-8 sm:flex-row sm:items-end sm:justify-between">
-    <div class="flex max-w-2xl flex-col gap-3">
-      <p class="text-primary text-sm font-medium tracking-widest uppercase">Free to keep</p>
-      <h1 class="font-heading text-4xl font-bold tracking-tight sm:text-5xl">Games worth claiming</h1>
-      <p class="text-muted-foreground text-lg">
-        Current giveaways from Epic Games, Prime Gaming, GOG, and Steam, gathered in one
-        place.
-      </p>
-    </div>
-    <Badge variant="secondary">
-      {data.items.count} {data.items.count === 1 ? "giveaway" : "giveaways"}
-    </Badge>
-  </header>
+  <div class="flex flex-col items-end gap-6">
+    <ThemeToggle />
+    <header class="flex w-full flex-col items-start gap-5 border-b pb-8 sm:flex-row sm:items-end sm:justify-between">
+      <div class="flex max-w-2xl flex-col gap-3">
+        <p class="text-primary text-sm font-medium tracking-widest uppercase">Free to keep</p>
+        <h1 class="font-heading text-4xl font-bold tracking-tight sm:text-5xl">Games worth claiming</h1>
+        <p class="text-muted-foreground text-lg">
+          Current giveaways from Epic Games, Prime Gaming, GOG, and Steam, gathered in one
+          place.
+        </p>
+      </div>
+      <Badge variant="secondary">
+        {data.items.count} {data.items.count === 1 ? "giveaway" : "giveaways"}
+      </Badge>
+    </header>
+  </div>
 
   {#if data.items.errors.length > 0}
     <Alert.Root>
