@@ -64,9 +64,11 @@ generates `docs/CHANGELOG.md`, verifies the prepared tree, and commits the relea
 creating the `vX.Y.Z` tag and GitHub release. The generated commit includes `[skip ci]` to avoid a
 duplicate push workflow.
 
-The release workflow checks that the tagged manifests match the tag, reruns the full verification
-suite, and smoke-tests both release images. Neither image is published unless all tagged-source and
-image checks pass.
+The pull-request and release workflows build each multi-platform image once, load it into the
+runner's containerd image store, and smoke-test its `linux/amd64` variant. Internal pull requests
+publish preview tags, while fork pull requests only run the image checks. Releases push the exact
+images that passed their smoke tests. Each image is published only after the tagged source and its
+own image check pass.
 
 ## Further reading
 
