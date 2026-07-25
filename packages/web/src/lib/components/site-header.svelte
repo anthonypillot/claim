@@ -1,6 +1,12 @@
 <script lang="ts">
+  import { dev } from "$app/environment";
+  import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
+  import { HugeiconsIcon } from "@hugeicons/svelte";
   import BrandLogo from "$lib/components/brand-logo.svelte";
   import ThemeToggle from "$lib/components/theme-toggle.svelte";
+  import { Button } from "$lib/components/ui/button";
+
+  const apiUrl = dev ? "/api/openapi" : "https://api.claim.anthonypillot.fr/openapi";
 </script>
 
 <header class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur">
@@ -12,6 +18,12 @@
     >
       <BrandLogo kind="mark" alt="" class="size-8" />
     </a>
-    <ThemeToggle />
+    <div class="flex items-center gap-2">
+      <Button href={apiUrl} target="_blank" rel="noreferrer">
+        API
+        <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />
+      </Button>
+      <ThemeToggle />
+    </div>
   </div>
 </header>
