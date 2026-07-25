@@ -1,8 +1,9 @@
 # Claim API
 
-Claim API is a small, read-only JSON HTTP API for currently free game giveaways. It aggregates
-offers from Epic Games, Amazon Prime Gaming, GOG, and Steam into a normalized response. GamerPower
-is planned next.
+Claim API exposes a read-only JSON HTTP surface for currently free game giveaways. It aggregates
+offers from Epic Games, Amazon Prime Gaming, GOG, and Steam into a normalized response. Giveaway
+requests maintain a read-through cache in Postgres; clients cannot mutate it directly. GamerPower is
+planned next.
 
 Giveaway data is cached in Postgres through Drizzle ORM, keeping repeat reads fast while preserving
 each store's history.
@@ -48,7 +49,7 @@ docker run --detach --rm --name claim-postgres \
   postgres:18-alpine
 until docker exec claim-postgres pg_isready --username=postgres --dbname=claim; do sleep 1; done
 
-bun run db:migrate
+bun --cwd packages/api run db:migrate
 bun run dev
 ```
 
@@ -65,7 +66,7 @@ curl "http://localhost:3000/giveaways?locale=fr-FR&country=FR"
 | -------------- | ---------------------------------------------------------------------------------------- |
 | `DATABASE_URL` | Postgres connection URL. Required by giveaway routes, `/ready`, and migration commands.  |
 | `PORT`         | HTTP port. Defaults to `3000`.                                                           |
-| `LOG_LEVEL`    | Pino log level.                                                                          |
+| `LOG_LEVEL`    | Pino log level. Defaults to `debug` in development and `info` in production.             |
 | `NODE_ENV`     | Use `production` for production logging defaults; `bun run start` sets it automatically. |
 
 `/health` and application construction do not need a database connection, which allows the
@@ -80,14 +81,14 @@ retain first- and last-seen history.
 
 The schema lives in `src/db/schema.ts`; generated SQL migrations live in `drizzle/`.
 
-Run migration commands from the repository root:
+Run migration commands from the repository root with the API package as the working directory:
 
 ```bash
 # After changing the schema, review and commit the generated migration.
-bun run db:generate
+bun --cwd packages/api run db:generate
 
 # Apply committed migrations from source.
-bun run db:migrate
+bun --cwd packages/api run db:migrate
 ```
 
 The production bundle deliberately excludes migration SQL and development-only tools. Apply
@@ -109,6 +110,16 @@ bun run start
 ```
 
 `bun run start` runs the built API with `NODE_ENV=production`.
+
+Run one suite or filter by test name from `packages/api`:
+
+```bash
+bun test src/modules/giveaways/index.test.ts
+bun test --test-name-pattern "returns 502"
+```
+
+Route and repository tests apply committed migrations to an in-memory PGlite database; they do not
+need an external Postgres instance.
 
 ## Docker
 

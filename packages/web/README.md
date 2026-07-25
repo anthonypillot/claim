@@ -1,42 +1,69 @@
-# sv
+# Claim Web
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Claim Web is the SvelteKit frontend for browsing the free-game giveaways exposed by Claim API.
 
-## Creating a project
+## Stack
 
-If you're seeing this, you've probably already done this step. Congrats!
+- SvelteKit 2 and Svelte 5 with runes mode forced for project files
+- Tailwind CSS 4
+- shadcn-svelte with the Rhea style, Taupe base color, and Hugeicons
+- Vitest with Node and Playwright browser projects
 
-```sh
-# create a new project
-npx sv create my-app
+## Development
+
+Install dependencies and configure the API by following the
+[root development guide](../../README.md). The preferred command from the repository root starts the
+API and web workspaces together:
+
+```bash
+bun run dev
 ```
 
-To recreate this project with the same configuration:
+The site is available at http://localhost:5173 and expects the API at http://localhost:3000.
 
-```sh
-# recreate this project
-bun x sv@0.16.5 create --template minimal --types ts --add vitest="usages:unit,component" tailwindcss="plugins:none" --install bun web
+During development, Vite rewrites browser requests under `/api/*` to the local API. The server hook
+performs the same rewrite for SSR requests. Production SSR currently fetches
+`https://api.claim.anthonypillot.fr` directly; there is no environment-variable override yet.
+
+## Commands
+
+Run package commands from `packages/web`:
+
+```bash
+bun run dev
+bun run check
+bun run test
+bun run build
+bun run preview
+bun run brand:export
 ```
 
-## Developing
+Run a focused unit test with:
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+```bash
+bun run test:unit -- --run src/lib/giveaways/model.test.ts
 ```
 
-## Building
+Root `bun run typecheck` does not invoke Svelte checking because this package exposes `check` rather
+than `typecheck`; always run `bun run check` for web changes. For full web verification, run
+`bun run check`, `bun run test`, then `bun run build`.
 
-To create a production version of your app:
+## UI And Assets
 
-```sh
-npm run build
-```
+shadcn-svelte configuration lives in `components.json`. Installed primitives are checked into
+`src/lib/components/ui`, shared theme variables are in `src/routes/layout.css`, and application
+components live directly under `src/lib/components`.
 
-You can preview the production build with `npm run preview`.
+`bun run brand:export` regenerates and verifies the SVG sources in `static/` and raster variants in
+`static/brand/`. Treat those files as generated outputs of `scripts/export-brand-assets.js`.
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## Configuration And Deployment
+
+The Svelte plugin, forced runes mode, Tailwind plugin, test projects, development proxy, and
+`adapter-auto` are all configured in `vite.config.ts`; this package intentionally has no separate
+`svelte.config.*`. Replace `adapter-auto` there when deploying to a platform it does not support.
+
+Framework references:
+
+- [Svelte and SvelteKit documentation](https://svelte.dev/docs)
+- [shadcn-svelte documentation](https://shadcn-svelte.com/docs)
