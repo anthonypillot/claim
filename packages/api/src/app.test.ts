@@ -78,12 +78,25 @@ describe("health probes", () => {
 
     const response = await app.handle(new Request(`${ROOT_URL}openapi/json`));
     const spec = (await response.json()) as {
+      info?: { title?: string };
       paths?: Record<string, { get?: { responses?: Record<string, unknown> } }>;
     };
 
     expect(response.status).toBe(200);
+    expect(spec.info?.title).toBe("Claim API");
     expect(spec.paths?.["/health"]?.get?.responses?.["200"]).toBeDefined();
     expect(spec.paths?.["/ready"]?.get?.responses?.["200"]).toBeDefined();
     expect(spec.paths?.["/ready"]?.get?.responses?.["503"]).toBeDefined();
+  });
+
+  it("uses a separate browser title for the OpenAPI page", async () => {
+    const app = buildApp(TEST_METADATA);
+
+    const response = await app.handle(new Request(`${ROOT_URL}openapi`));
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain("<title>Claim API</title>");
+    expect(html).toContain('"metaData":{"title":"API | Claim"}');
   });
 });

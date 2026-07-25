@@ -33,6 +33,11 @@ export function buildApp(metadata: AppMetadata, dependencies: AppDependencies = 
     .use(cors())
     .use(
       openapi({
+        scalar: {
+          metaData: {
+            title: "API | Claim",
+          },
+        },
         documentation: {
           info: {
             title: displayName,
