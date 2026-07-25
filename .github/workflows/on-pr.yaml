@@ -12,7 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  extract-version:
+  extract:
+    name: 📄 Extract version
     uses: anthonypillot/actions/.github/workflows/extract-version.yaml@main
 
   verify:
@@ -93,7 +94,7 @@ jobs:
 
   publish-preview:
     name: 🐳 Publish ${{ matrix.image }} preview
-    needs: [extract-version, verify-images]
+    needs: [extract, verify-images]
     if: github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
@@ -132,10 +133,10 @@ jobs:
           push: true
           pull: true
           platforms: linux/amd64,linux/arm64
-          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.extract-version.outputs.result }}
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.extract.outputs.result }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.event.pull_request.head.sha }}
-            org.opencontainers.image.version=${{ needs.extract-version.outputs.result }}
+            org.opencontainers.image.version=${{ needs.extract.outputs.result }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
