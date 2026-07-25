@@ -13,7 +13,7 @@
 </script>
 
 <svelte:head>
-  <title>Free game giveaways | Claim</title>
+  <title>Giveaways | Claim</title>
   <meta name="description" content="Discover free-to-keep games available now across major storefronts." />
 </svelte:head>
 
