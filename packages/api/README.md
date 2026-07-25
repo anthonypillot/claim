@@ -35,7 +35,8 @@ fails while other stores have usable data, it still returns HTTP 200 and lists t
 
 ## Local development
 
-The CI and production image use Bun 1.3.14. You also need Postgres; Docker is the quickest way to
+CI and the production image use the latest Bun 1.3 patch release. You also need Postgres; Docker is
+the quickest way to
 run it locally. From the repository root:
 
 ```bash
@@ -130,7 +131,7 @@ need an external Postgres instance.
 Build with the repository root as the Docker context so Bun can install the complete workspace:
 
 ```bash
-docker build --file packages/api/Dockerfile --tag claim-api .
+docker build --pull --file packages/api/Dockerfile --tag claim-api .
 docker run --rm --publish 3000:3000 \
   --env DATABASE_URL="postgres://postgres:postgres@database-host:5432/claim" \
   --env PUBLIC_API_URL="https://api.claim.anthonypillot.com" \

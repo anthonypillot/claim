@@ -12,7 +12,7 @@ Steam. The repository contains the public JSON API and a SvelteKit site that con
 
 ## Prerequisites
 
-- Bun 1.3.14 (the version used by CI and the API image)
+- Bun 1.3 (CI and images automatically use the latest patch release)
 - PostgreSQL, or Docker for the PostgreSQL 18 development database shown below
 
 ## Local Development
@@ -51,7 +51,7 @@ Run shared verification from the repository root:
 bun run lint
 bun run format:check
 bun run typecheck
-bun --cwd packages/web run check
+bun run --cwd packages/web check
 bun test
 bun run build
 ```

@@ -51,5 +51,5 @@ export function formatStore(store: StoreId): string {
 
 export function formatExpiry(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Unknown" : expiryFormatter.format(date);
+  return Number.isNaN(date.getTime()) ? "Unknown" : expiryFormatter.format(date).replace(" at ", ", ");
 }

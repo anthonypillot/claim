@@ -64,16 +64,16 @@ Outbound HTTP tests stub `globalThis.fetch` with co-located fixtures and restore
 `drizzle-kit`, `@electric-sql/pglite`, and `pino-pretty` are development-only and must not enter the
 production bundle. After API build changes, confirm `build/index.js` contains none of
 `drizzle-kit`, `pglite`, or `@electric-sql`. Build the image from the repository root with
-`docker build --file packages/api/Dockerfile --tag claim-api .`; its `/health` check must stay
+`docker build --pull --file packages/api/Dockerfile --tag claim-api .`; its `/health` check must stay
 database-independent. Apply migrations from source before deployment.
 
 ## Web
 
-- Svelte runes mode is forced for project files and `adapter-auto` is configured inside
+- Svelte runes mode is forced for project files and `adapter-node` is configured inside
   `packages/web/vite.config.ts`; there is no separate `svelte.config.*`.
 - During development, browser and SSR requests under `/api/*` are rewritten to
-  `http://localhost:3000`. Production reads `PUBLIC_API_URL` and `PUBLIC_WEB_URL` at runtime; both
-  values are required HTTP(S) origins without paths.
+  `http://localhost:3000`. Production reads `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, and the adapter's
+  `ORIGIN` at runtime; all values are required HTTP(S) origins without paths.
 - shadcn-svelte configuration is `packages/web/components.json`: Rhea style, Taupe base color,
   Hugeicons, components under `src/lib/components/ui`, and theme variables in
   `src/routes/layout.css`. Use the repository's `shadcn-svelte` skill for component work and preserve

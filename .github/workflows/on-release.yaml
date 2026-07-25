@@ -14,10 +14,17 @@ concurrency:
 
 jobs:
   publish:
-    name: 🐳 Publish release image
+    name: 🐳 Publish ${{ matrix.image }} release
     runs-on: ubuntu-latest
     env:
       TAG: ${{ github.event.release.tag_name }}
+    strategy:
+      matrix:
+        include:
+          - image: claim-api
+            dockerfile: packages/api/Dockerfile
+          - image: claim-web
+            dockerfile: packages/web/Dockerfile
 
     steps:
       - name: 🏷️ Validate and derive image tags
@@ -58,7 +65,7 @@ jobs:
         id: metadata
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/claim-api
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
             type=raw,value=${{ steps.version.outputs.version }}
             type=raw,value=${{ steps.version.outputs.minor }}
@@ -73,10 +80,11 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: packages/api/Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: true
+          pull: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

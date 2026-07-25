@@ -33,6 +33,7 @@ bun run dev
 bun run check
 bun run test
 bun run build
+bun run start
 bun run preview
 bun run brand:export
 ```
@@ -60,18 +61,46 @@ components live directly under `src/lib/components`.
 
 Production requires these runtime environment variables:
 
-| Variable         | Purpose                                               |
-| ---------------- | ----------------------------------------------------- |
-| `PUBLIC_API_URL` | API origin used for requests and the OpenAPI link.    |
-| `PUBLIC_WEB_URL` | Web origin used to generate canonical page URLs.      |
+| Variable         | Purpose                                            |
+| ---------------- | -------------------------------------------------- |
+| `PUBLIC_API_URL` | API origin used for requests and the OpenAPI link. |
+| `PUBLIC_WEB_URL` | Web origin used to generate canonical page URLs.   |
+| `ORIGIN`         | Public web origin used by the Node server.         |
+| `PORT`           | Listening port. Defaults to `3000`.                |
 
 Set them to `https://api.claim.anthonypillot.com` and `https://claim.anthonypillot.com`,
 respectively. Values must be HTTP(S) origins without a path, query, or fragment. See `.env.example`
 for a deployable template; local development continues to use the Vite origins and `/api` proxy.
 
 The Svelte plugin, forced runes mode, Tailwind plugin, test projects, development proxy, and
-`adapter-auto` are all configured in `vite.config.ts`; this package intentionally has no separate
-`svelte.config.*`. Replace `adapter-auto` there when deploying to a platform it does not support.
+`adapter-node` are all configured in `vite.config.ts`; this package intentionally has no separate
+`svelte.config.*`.
+
+Build the production image from the repository root:
+
+```bash
+docker build --pull --file packages/web/Dockerfile --tag claim-web .
+```
+
+The build uses Bun while the production stage runs Node 24 in a non-root distroless image. Start it
+with runtime configuration injected by the deployment platform:
+
+```bash
+docker run --rm --publish 3000:3000 \
+  --env PUBLIC_API_URL=https://api.claim.anthonypillot.com \
+  --env PUBLIC_WEB_URL=https://claim.anthonypillot.com \
+  --env ORIGIN=https://claim.anthonypillot.com \
+  claim-web
+```
+
+The container exposes an API-independent health check at `GET /health`. Production releases are
+published to `ghcr.io/anthonypillot/claim-web` with semantic-version, major, minor, and `latest`
+tags. Pull requests from this repository publish a versioned preview tag.
+
+Set `ORIGIN` directly unless the server is behind a trusted reverse proxy. In that case,
+`PROTOCOL_HEADER=x-forwarded-proto` and `HOST_HEADER=x-forwarded-host` can be used instead. The
+distroless runtime has no shell; use the corresponding `debug-nonroot` image temporarily when shell
+access is required for diagnosis.
 
 Framework references:
 
