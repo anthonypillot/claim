@@ -72,8 +72,8 @@ database-independent. Apply migrations from source before deployment.
 - Svelte runes mode is forced for project files and `adapter-auto` is configured inside
   `packages/web/vite.config.ts`; there is no separate `svelte.config.*`.
 - During development, browser and SSR requests under `/api/*` are rewritten to
-  `http://localhost:3000`. Production SSR currently fetches
-  `https://api.claim.anthonypillot.fr` directly.
+  `http://localhost:3000`. Production reads `PUBLIC_API_URL` and `PUBLIC_WEB_URL` at runtime; both
+  values are required HTTP(S) origins without paths.
 - shadcn-svelte configuration is `packages/web/components.json`: Rhea style, Taupe base color,
   Hugeicons, components under `src/lib/components/ui`, and theme variables in
   `src/routes/layout.css`. Use the repository's `shadcn-svelte` skill for component work and preserve

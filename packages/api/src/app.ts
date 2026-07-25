@@ -16,6 +16,7 @@ export type AppMetadata = {
 
 export type AppDependencies = {
   checkReadiness?: CheckReadiness;
+  apiUrl?: string;
 };
 
 // Capitalize the raw package name and suffix it, e.g. "claim" -> "Claim API".
@@ -39,6 +40,7 @@ export function buildApp(metadata: AppMetadata, dependencies: AppDependencies = 
           },
         },
         documentation: {
+          ...(dependencies.apiUrl ? { servers: [{ url: dependencies.apiUrl }] } : {}),
           info: {
             title: displayName,
             version: metadata.version,

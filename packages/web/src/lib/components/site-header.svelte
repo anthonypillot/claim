@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { dev } from "$app/environment";
   import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import BrandLogo from "$lib/components/brand-logo.svelte";
   import ThemeToggle from "$lib/components/theme-toggle.svelte";
   import { Button } from "$lib/components/ui/button";
+  import { getApiUrl } from "$lib/config";
 
-  const apiUrl = dev ? "/api/openapi" : "https://api.claim.anthonypillot.fr/openapi";
+  const apiUrl = getApiUrl("/openapi");
 </script>
 
 <header class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur">

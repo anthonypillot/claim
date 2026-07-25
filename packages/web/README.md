@@ -22,8 +22,7 @@ bun run dev
 The site is available at http://localhost:5173 and expects the API at http://localhost:3000.
 
 During development, Vite rewrites browser requests under `/api/*` to the local API. The server hook
-performs the same rewrite for SSR requests. Production SSR currently fetches
-`https://api.claim.anthonypillot.fr` directly; there is no environment-variable override yet.
+performs the same rewrite for SSR requests.
 
 ## Commands
 
@@ -58,6 +57,17 @@ components live directly under `src/lib/components`.
 `static/brand/`. Treat those files as generated outputs of `scripts/export-brand-assets.js`.
 
 ## Configuration And Deployment
+
+Production requires these runtime environment variables:
+
+| Variable         | Purpose                                               |
+| ---------------- | ----------------------------------------------------- |
+| `PUBLIC_API_URL` | API origin used for requests and the OpenAPI link.    |
+| `PUBLIC_WEB_URL` | Web origin used to generate canonical page URLs.      |
+
+Set them to `https://api.claim.anthonypillot.com` and `https://claim.anthonypillot.com`,
+respectively. Values must be HTTP(S) origins without a path, query, or fragment. See `.env.example`
+for a deployable template; local development continues to use the Vite origins and `/api` proxy.
 
 The Svelte plugin, forced runes mode, Tailwind plugin, test projects, development proxy, and
 `adapter-auto` are all configured in `vite.config.ts`; this package intentionally has no separate

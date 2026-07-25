@@ -62,12 +62,16 @@ curl "http://localhost:3000/giveaways?locale=fr-FR&country=FR"
 
 ## Configuration
 
-| Variable       | Purpose                                                                                  |
-| -------------- | ---------------------------------------------------------------------------------------- |
-| `DATABASE_URL` | Postgres connection URL. Required by giveaway routes, `/ready`, and migration commands.  |
-| `PORT`         | HTTP port. Defaults to `3000`.                                                           |
-| `LOG_LEVEL`    | Pino log level. Defaults to `debug` in development and `info` in production.             |
-| `NODE_ENV`     | Use `production` for production logging defaults; `bun run start` sets it automatically. |
+| Variable         | Purpose                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| `DATABASE_URL`   | Postgres connection URL. Required by giveaway routes, `/ready`, and migration commands.  |
+| `PUBLIC_API_URL` | Public API origin advertised by OpenAPI. Required in production.                         |
+| `PORT`           | HTTP port. Defaults to `3000`.                                                           |
+| `LOG_LEVEL`      | Pino log level. Defaults to `debug` in development and `info` in production.             |
+| `NODE_ENV`       | Use `production` for production logging defaults; `bun run start` sets it automatically. |
+
+`PUBLIC_API_URL` must be an HTTP(S) origin without a path, query, or fragment. It defaults to the
+local API origin outside production. CORS is unrestricted because the API is public and read-only.
 
 `/health` and application construction do not need a database connection, which allows the
 container liveness probe to remain independent of Postgres.
@@ -129,6 +133,7 @@ Build with the repository root as the Docker context so Bun can install the comp
 docker build --file packages/api/Dockerfile --tag claim-api .
 docker run --rm --publish 3000:3000 \
   --env DATABASE_URL="postgres://postgres:postgres@database-host:5432/claim" \
+  --env PUBLIC_API_URL="https://api.claim.anthonypillot.com" \
   claim-api
 ```
 

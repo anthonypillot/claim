@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { buildApp, formatApiName } from "./app.ts";
 
 const ROOT_URL = "http://localhost/";
+const API_URL = "https://api.claim.anthonypillot.com";
 const TEST_METADATA = {
   name: "claim",
   version: "1.2.3",
@@ -74,19 +75,36 @@ describe("health probes", () => {
   });
 
   it("documents both probes in OpenAPI", async () => {
-    const app = buildApp(TEST_METADATA);
+    const app = buildApp(TEST_METADATA, { apiUrl: API_URL });
 
     const response = await app.handle(new Request(`${ROOT_URL}openapi/json`));
     const spec = (await response.json()) as {
       info?: { title?: string };
       paths?: Record<string, { get?: { responses?: Record<string, unknown> } }>;
+      servers?: { url?: string }[];
     };
 
     expect(response.status).toBe(200);
     expect(spec.info?.title).toBe("Claim API");
+    expect(spec.servers).toEqual([{ url: API_URL }]);
     expect(spec.paths?.["/health"]?.get?.responses?.["200"]).toBeDefined();
     expect(spec.paths?.["/ready"]?.get?.responses?.["200"]).toBeDefined();
     expect(spec.paths?.["/ready"]?.get?.responses?.["503"]).toBeDefined();
+  });
+
+  it("allows arbitrary browser origins through CORS", async () => {
+    const app = buildApp(TEST_METADATA);
+    const response = await app.handle(
+      new Request(`${ROOT_URL}giveaways`, {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://example.com",
+          "Access-Control-Request-Method": "GET",
+        },
+      }),
+    );
+
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://example.com");
   });
 
   it("uses a separate browser title for the OpenAPI page", async () => {
