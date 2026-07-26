@@ -107,7 +107,7 @@ describe("health probes", () => {
     expect(response.headers.get("access-control-allow-origin")).toBe("https://example.com");
   });
 
-  it("uses a separate browser title for the OpenAPI page", async () => {
+  it("uses Claim branding for the OpenAPI page", async () => {
     const app = buildApp(TEST_METADATA);
 
     const response = await app.handle(new Request(`${ROOT_URL}openapi`));
@@ -115,6 +115,9 @@ describe("health probes", () => {
 
     expect(response.status).toBe(200);
     expect(html).toContain("<title>Claim API</title>");
+    expect(html).toContain('"favicon":"data:image/svg+xml,%3Csvg');
+    expect(html).toContain("M42%2067L59%2084L99%2044");
+    expect(html).toContain("stroke%3D%22%23FF6B00%22");
     expect(html).toContain('"metaData":{"title":"API | Claim"}');
   });
 });

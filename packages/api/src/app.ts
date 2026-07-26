@@ -2,11 +2,13 @@ import { cors } from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 
+import faviconSvg from "../../web/static/favicon.svg" with { type: "text" };
 import { createGiveaways } from "./modules/giveaways/index.ts";
 import { type CheckReadiness, createHealth } from "./modules/health/index.ts";
 import { createLogger } from "./utils/logger.ts";
 
 const log = createLogger("http");
+const favicon = `data:image/svg+xml,${encodeURIComponent(faviconSvg)}`;
 
 export type AppMetadata = {
   name: string;
@@ -35,6 +37,7 @@ export function buildApp(metadata: AppMetadata, dependencies: AppDependencies = 
     .use(
       openapi({
         scalar: {
+          favicon,
           metaData: {
             title: "API | Claim",
           },
