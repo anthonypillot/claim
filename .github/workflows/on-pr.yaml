@@ -16,8 +16,8 @@ jobs:
     name: 📄 Extract version
     uses: anthonypillot/actions/.github/workflows/extract-version.yaml@main
 
-  verify:
-    name: 🧪 Verify
+  build:
+    name: 🏗️ Build
     runs-on: ubuntu-latest
 
     steps:
@@ -54,8 +54,8 @@ jobs:
         run: bun run build
 
   images:
-    name: 🐳 Build, verify, and publish ${{ matrix.image }} preview
-    needs: [extract, verify]
+    name: 🐳 Build and publish ${{ matrix.image }} preview
+    needs: [extract, build]
     permissions:
       contents: read
       packages: write
@@ -67,7 +67,7 @@ jobs:
             dockerfile: packages/api/Dockerfile
           - image: claim-web
             dockerfile: packages/web/Dockerfile
-    uses: ./.github/workflows/build-verify-publish-image.yaml
+    uses: ./.github/workflows/build-publish-image.yaml
     with:
       dockerfile: ${{ matrix.dockerfile }}
       image: ${{ matrix.image }}

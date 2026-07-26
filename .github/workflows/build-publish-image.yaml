@@ -1,4 +1,4 @@
-name: 🐳 Build, verify, and publish image
+name: 🐳 Build and publish image
 
 on:
   workflow_call:
@@ -36,7 +36,7 @@ on:
 
 jobs:
   image:
-    name: 🐳 Build, verify, and publish ${{ inputs.image }}
+    name: 🐳 Build and publish ${{ inputs.image }}
     runs-on: ubuntu-latest
 
     steps:
