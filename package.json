@@ -1,6 +1,6 @@
 {
   "name": "claim",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Claim aggregates currently free game giveaways from Epic Games, Amazon Prime Gaming, GOG, and Steam.",
   "license": "GPL-3.0-or-later",
   "author": {
