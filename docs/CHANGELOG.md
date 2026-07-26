@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/anthonypillot/claim/compare/v1.0.1...v1.0.2) (2026-07-26)
+
+
+### Performance Improvements
+
+* **api:** add Claim favicon to Scalar docs ([7845eda](https://github.com/anthonypillot/claim/commit/7845eda587aeab73f0696b70e3097e8f88a331bf))
+
 ## [1.0.1](https://github.com/anthonypillot/claim/compare/v1.0.0...v1.0.1) (2026-07-26)
 
 
