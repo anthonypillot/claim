@@ -21,7 +21,7 @@ COPY . .
 
 RUN bun run --cwd /app/packages/api build:production
 
-FROM base AS runtime
+FROM oven/bun:1.3-distroless AS runtime
 
 ENV NODE_ENV=production
 
@@ -29,14 +29,14 @@ ENV NODE_ENV=production
 # for runtime code that resolves package metadata relative to the working directory.
 WORKDIR /app/packages/api
 
-COPY --chown=bun:bun package.json /app/package.json
-COPY --chown=bun:bun packages/api/package.json ./package.json
-COPY --chown=bun:bun --from=build /app/packages/api/build ./build
+COPY --chown=65532:65532 package.json /app/package.json
+COPY --chown=65532:65532 packages/api/package.json ./package.json
+COPY --chown=65532:65532 --from=build /app/packages/api/build ./build
 
-USER bun
+USER 65532:65532
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD ["bun", "-e", "const port = process.env.PORT ?? '3000'; const response = await fetch(`http://127.0.0.1:${port}/health`); process.exit(response.ok ? 0 : 1);"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD ["/usr/local/bin/bun", "-e", "const port = process.env.PORT ?? '3000'; const response = await fetch(`http://127.0.0.1:${port}/health`); process.exit(response.ok ? 0 : 1);"]
 
-CMD ["bun", "./build/index.js"]
+CMD ["./build/index.js"]
