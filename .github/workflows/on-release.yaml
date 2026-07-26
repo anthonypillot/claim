@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify:
-    name: 🧪 Verify tagged source
+  build:
+    name: 🏗️ Build tagged source
     runs-on: ubuntu-latest
     env:
       TAG: ${{ github.event.release.tag_name }}
@@ -50,12 +50,12 @@ jobs:
           bun scripts/check-versions.mjs "$version"
           printf 'version=%s\nmajor=%s\nminor=%s.%s\n' "$version" "$major" "$major" "$minor" >> "$GITHUB_OUTPUT"
 
-      - name: 🧪 Verify tagged source
+      - name: 🏗️ Build tagged source
         run: bun run verify
 
   images:
-    name: 🐳 Build, verify, and publish ${{ matrix.image }} release
-    needs: verify
+    name: 🐳 Build and publish ${{ matrix.image }} release
+    needs: build
     permissions:
       contents: read
       packages: write
@@ -67,17 +67,17 @@ jobs:
             dockerfile: packages/api/Dockerfile
           - image: claim-web
             dockerfile: packages/web/Dockerfile
-    uses: ./.github/workflows/build-verify-publish-image.yaml
+    uses: ./.github/workflows/build-publish-image.yaml
     with:
       checkout-ref: ${{ github.event.release.tag_name }}
       dockerfile: ${{ matrix.dockerfile }}
       image: ${{ matrix.image }}
       publish: true
       tags: |
-        ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.verify.outputs.version }}
-        ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.verify.outputs.minor }}
-        ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.verify.outputs.major }}
+        ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.build.outputs.version }}
+        ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.build.outputs.minor }}
+        ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.build.outputs.major }}
         ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest
-      version: ${{ needs.verify.outputs.version }}
+      version: ${{ needs.build.outputs.version }}
     secrets:
       registry-token: ${{ secrets.GITHUB_TOKEN }}
