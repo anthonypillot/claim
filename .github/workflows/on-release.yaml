@@ -1,4 +1,4 @@
-name: 🏷️ On release
+name: 🏷️ On Release
 
 on:
   release:
