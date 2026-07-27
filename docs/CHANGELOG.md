@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/anthonypillot/claim/compare/v1.0.2...v1.1.0) (2026-07-27)
+
+
+### Features
+
+* **web:** giveaway filtering and expiry display ([#37](https://github.com/anthonypillot/claim/issues/37)) ([9451a7a](https://github.com/anthonypillot/claim/commit/9451a7a3e8e62e1a76dda34550fbe7ad7c787b8a))
+
 ## [1.0.2](https://github.com/anthonypillot/claim/compare/v1.0.1...v1.0.2) (2026-07-26)
 
 
