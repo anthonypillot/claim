@@ -3,9 +3,12 @@ import { createLogger } from "../../utils/logger.ts";
 import type { AllGiveawaysResponse, Giveaway, StoreGiveaway, StoreId } from "./model.ts";
 import { STORE_IDS } from "./model.ts";
 import {
+  acquireRefreshLease,
   findActiveGiveaways,
-  findFreshStoreIds,
+  hasSuccessfulSnapshot,
   isFresh,
+  isInFailureCooldown,
+  recordRefreshFailure,
   refreshStore,
   toGiveaway,
   toStoreGiveaway,
@@ -13,9 +16,9 @@ import {
 import { fetchFreeGames as fetchEpicGamesGiveaways } from "./stores/epic-games/index.ts";
 import { fetchFreeGames as fetchGogGiveaways } from "./stores/gog/index.ts";
 import { fetchFreeGames as fetchPrimeGamingGiveaways } from "./stores/prime-gaming/index.ts";
-import { fetchFreeGames as fetchSteamGiveaways } from "./stores/steam/index.ts";
 import type { FetchFreeGames } from "./stores/shared.ts";
 import { UpstreamError } from "./stores/shared.ts";
+import { fetchFreeGames as fetchSteamGiveaways } from "./stores/steam/index.ts";
 
 const log = createLogger("giveaways service");
 
@@ -27,25 +30,76 @@ const storeFetchers = {
   steam: fetchSteamGiveaways,
 } as const satisfies Record<StoreId, FetchFreeGames>;
 
-type StoreResult =
-  | { store: StoreId; ok: true; giveaways: Giveaway[] }
-  | { store: StoreId; ok: false; error: unknown };
+type RefreshStatus = "fresh" | "refreshed" | "degraded" | "unavailable";
+type RefreshResult = { store: StoreId; status: RefreshStatus };
 
-/** Fetches the requested stores concurrently and keeps failures isolated by store. */
-async function fetchStores(
-  stores: readonly StoreId[],
+const refreshesByDatabase = new WeakMap<Database, Map<string, Promise<RefreshResult>>>();
+
+function scopeKey(store: StoreId, options: { locale: string; country: string }): string {
+  return `${store}\0${options.locale}\0${options.country}`;
+}
+
+async function refreshScope(
+  db: Database,
+  store: StoreId,
   options: { locale: string; country: string },
-): Promise<StoreResult[]> {
-  log.debug({ stores, ...options }, "fetching stores");
-  return Promise.all(
-    stores.map(async (store): Promise<StoreResult> => {
-      try {
-        return { store, ok: true, giveaways: await storeFetchers[store](options) };
-      } catch (error) {
-        return { store, ok: false, error };
-      }
-    }),
-  );
+): Promise<RefreshResult> {
+  const scope = { ...options, store };
+  if (await isFresh(db, scope)) return { store, status: "fresh" };
+
+  const leaseToken = await acquireRefreshLease(db, scope);
+  if (leaseToken === null) {
+    if (await isFresh(db, scope)) return { store, status: "fresh" };
+    const hasSnapshot = await hasSuccessfulSnapshot(db, scope);
+    const inCooldown = await isInFailureCooldown(db, scope);
+    log.debug({ store, ...options, hasSnapshot, inCooldown }, "refresh deferred");
+    return { store, status: hasSnapshot ? "degraded" : "unavailable" };
+  }
+
+  log.debug({ store, ...options }, "store stale, fetching live");
+  let live: Giveaway[];
+  try {
+    live = await storeFetchers[store](options);
+  } catch (error) {
+    await recordRefreshFailure(db, scope, leaseToken);
+    log.error({ store, ...options, err: error }, "upstream fetch failed");
+    return {
+      store,
+      status: (await hasSuccessfulSnapshot(db, scope)) ? "degraded" : "unavailable",
+    };
+  }
+
+  const written = await refreshStore(db, options, store, live, leaseToken);
+  if (written === null) {
+    return {
+      store,
+      status: (await hasSuccessfulSnapshot(db, scope)) ? "degraded" : "unavailable",
+    };
+  }
+  log.info({ store, ...options, count: written }, "cached live store giveaways");
+  return { store, status: "refreshed" };
+}
+
+/** Shares one refresh promise for a cache scope between aggregate and per-store requests. */
+function coordinateRefresh(
+  db: Database,
+  store: StoreId,
+  options: { locale: string; country: string },
+): Promise<RefreshResult> {
+  let refreshes = refreshesByDatabase.get(db);
+  if (refreshes === undefined) {
+    refreshes = new Map();
+    refreshesByDatabase.set(db, refreshes);
+  }
+  const key = scopeKey(store, options);
+  const existing = refreshes.get(key);
+  if (existing) return existing;
+
+  const refresh = refreshScope(db, store, options).finally(() => {
+    if (refreshes.get(key) === refresh) refreshes.delete(key);
+  });
+  refreshes.set(key, refresh);
+  return refresh;
 }
 
 /** Store-declaration order first (matches the live aggregate), then id, for a stable envelope. */
@@ -61,43 +115,43 @@ export async function getAllFreeGamesCached(
   db: Database,
   options: { locale: string; country: string },
 ): Promise<AllGiveawaysResponse> {
-  const freshStores = await findFreshStoreIds(db, options);
-  const staleStores = STORE_IDS.filter((store) => !freshStores.includes(store));
-  const results = await fetchStores(staleStores, options);
-  const successes = results.filter((result) => result.ok);
-  const failures = results.filter((result) => !result.ok);
+  const results = await Promise.all(
+    STORE_IDS.map((store) => coordinateRefresh(db, store, options)),
+  );
+  const availableStores = new Set(
+    results.filter((result) => result.status !== "unavailable").map((result) => result.store),
+  );
+  const degradedStores = results.filter(
+    (result) => result.status === "degraded" || result.status === "unavailable",
+  );
 
-  if (freshStores.length === 0 && successes.length === 0) {
+  if (availableStores.size === 0) {
     throw new UpstreamError("all stores", "all store fetches failed", {
-      cause: new AggregateError(failures.map((failure) => failure.error)),
+      cause: new AggregateError([]),
     });
   }
 
-  await Promise.all(
-    successes.map((result) => refreshStore(db, options, result.store, result.giveaways)),
-  );
-  for (const failure of failures) {
-    log.error({ store: failure.store, err: failure.error }, "upstream fetch failed");
-  }
-
-  const availableStores = new Set<StoreId>([
-    ...freshStores,
-    ...successes.map((result) => result.store),
-  ]);
   const giveaways = (await findActiveGiveaways(db, options))
     .map(toStoreGiveaway)
     .filter((giveaway) => availableStores.has(giveaway.store))
     .toSorted(byStoreThenId);
   log.debug(
-    { ...options, count: giveaways.length, refreshed: successes.map((result) => result.store) },
+    {
+      ...options,
+      count: giveaways.length,
+      refreshed: results
+        .filter((result) => result.status === "refreshed")
+        .map((result) => result.store),
+      degraded: degradedStores.map((result) => result.store),
+    },
     "serving aggregate cache",
   );
   return {
     count: giveaways.length,
     giveaways,
-    errors: failures.map((failure) => ({
-      store: failure.store,
-      error: `Failed to fetch giveaways from ${failure.store}`,
+    errors: degradedStores.map((result) => ({
+      store: result.store,
+      error: `Failed to fetch giveaways from ${result.store}`,
     })),
   };
 }
@@ -108,12 +162,8 @@ export async function getStoreFreeGamesCached<Store extends StoreId>(
   store: Store,
   options: { locale: string; country: string },
 ): Promise<{ store: Store; count: number; giveaways: Giveaway[] }> {
-  if (!(await isFresh(db, { ...options, store }))) {
-    log.debug({ store, ...options }, "store stale, fetching live");
-    const live = await storeFetchers[store](options);
-    await refreshStore(db, options, store, live);
-    log.info({ store, ...options, count: live.length }, "cached live store giveaways");
-  }
+  const result = await coordinateRefresh(db, store, options);
+  if (result.status === "unavailable") throw new UpstreamError(store, "store refresh failed");
   const cached = (await findActiveGiveaways(db, { ...options, store }))
     .map(toGiveaway)
     .toSorted((a, b) => a.id.localeCompare(b.id));
