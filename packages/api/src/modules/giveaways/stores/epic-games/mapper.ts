@@ -1,8 +1,9 @@
 import type { Giveaway, GiveawayImages } from "../../model.ts";
+import { normalizeExternalUrl } from "../shared.ts";
 import type { EpicOffer } from "./types.ts";
 
 function findImage(keyImages: EpicOffer["keyImages"], type: string): string | null {
-  return keyImages?.find((image) => image.type === type)?.url ?? null;
+  return normalizeExternalUrl(keyImages?.find((image) => image.type === type)?.url);
 }
 
 function toImages(keyImages: EpicOffer["keyImages"]): GiveawayImages {
@@ -50,7 +51,9 @@ function toGiveaway(offer: EpicOffer, freeUntil: string, locale: string): Giveaw
     id: offer.id,
     title: offer.title,
     description: offer.description,
-    url: pageSlug ? `https://store.epicgames.com/${locale}/p/${pageSlug}` : null,
+    url: normalizeExternalUrl(
+      pageSlug ? `https://store.epicgames.com/${locale}/p/${pageSlug}` : null,
+    ),
     images: toImages(offer.keyImages),
     seller: offer.seller?.name ?? "Unknown",
     price,

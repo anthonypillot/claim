@@ -58,6 +58,20 @@ describe("fetchFreeGames", () => {
     ]);
   });
 
+  it("nulls unsafe claim and image URLs", async () => {
+    const body = structuredClone(primeFreeGamesFixture);
+    const assets = body.data!.games!.items![0]!.assets!;
+    assets.externalClaimLink = "javascript:alert(1)";
+    assets.heroMedia!.defaultMedia!.src1x = "data:text/html,unsafe";
+    assets.cardMedia!.defaultMedia!.src1x = "file:///tmp/card.jpg";
+    stubFetch({ graphql: () => graphqlResponse(body) });
+
+    const [game] = await fetchFreeGames({ locale: "en-US", country: "US" });
+
+    expect(game?.url).toBeNull();
+    expect(game?.images).toEqual({ wide: null, tall: null, thumbnail: null });
+  });
+
   it("bootstraps a session and forwards it to the GraphQL request", async () => {
     await fetchFreeGames({ locale: "fr-FR", country: "FR" });
 

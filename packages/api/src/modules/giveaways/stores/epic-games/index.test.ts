@@ -40,6 +40,32 @@ describe("fetchFreeGames", () => {
     ]);
   });
 
+  it("nulls unsafe upstream image URLs", async () => {
+    const body = structuredClone(epicFreeGamesFixture);
+    const images = body.data!.Catalog!.searchStore!.elements![0]!.keyImages!;
+    images[0]!.url = "javascript:alert(1)";
+    images[1]!.url = "https://user:password@example.com/wide.png";
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify(body)));
+
+    const [game] = await fetchFreeGames({ locale: "en-US", country: "US" });
+
+    expect(game?.images).toEqual({
+      wide: null,
+      tall: "https://cdn.example.com/tall.png",
+      thumbnail: null,
+    });
+  });
+
+  it("rejects a response whose declared size exceeds the limit", async () => {
+    fetchSpy.mockResolvedValue(
+      new Response("{}", { headers: { "content-length": String(5 * 1024 * 1024 + 1) } }),
+    );
+
+    await expect(fetchFreeGames({ locale: "en-US", country: "US" })).rejects.toThrow(
+      "upstream response too large",
+    );
+  });
+
   it("forwards the canonical locale and country to the upstream URL", async () => {
     await fetchFreeGames({ locale: "fr-FR", country: "FR" });
 

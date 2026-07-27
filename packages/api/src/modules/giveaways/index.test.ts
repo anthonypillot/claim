@@ -12,6 +12,7 @@ import {
   type AllGiveawaysResponse,
   CACHE_TTL_HOURS,
   type Giveaway,
+  GiveawaySchema,
   GiveawaysQuerySchema,
   STORE_IDS,
 } from "./model.ts";
@@ -123,6 +124,16 @@ afterAll(async () => {
 describe("GiveawaysQuerySchema", () => {
   it("marks locale and country as optional (omittable, defaults applied at runtime)", () => {
     expect(GiveawaysQuerySchema.required).toBeUndefined();
+  });
+});
+
+describe("GiveawaySchema", () => {
+  it("constrains response URLs to HTTP(S) URIs", () => {
+    const urlSchema = GiveawaySchema.properties.url.anyOf[0];
+    const imageSchema = GiveawaySchema.properties.images.properties.wide.anyOf[0];
+
+    expect(urlSchema).toMatchObject({ format: "uri", pattern: "^https?://" });
+    expect(imageSchema).toMatchObject({ format: "uri", pattern: "^https?://" });
   });
 });
 

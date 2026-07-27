@@ -1,4 +1,5 @@
 import type { Giveaway } from "../../model.ts";
+import { normalizeExternalUrl } from "../shared.ts";
 import type { PrimeItem } from "./types.ts";
 
 /**
@@ -19,13 +20,13 @@ function getActiveFullGameWindow(item: PrimeItem, now: Date): { endTime: string 
 }
 
 function toGiveaway(item: PrimeItem, freeUntil: string): Giveaway {
-  const hero = item.assets?.heroMedia?.defaultMedia?.src1x ?? null;
-  const card = item.assets?.cardMedia?.defaultMedia?.src1x ?? null;
+  const hero = normalizeExternalUrl(item.assets?.heroMedia?.defaultMedia?.src1x);
+  const card = normalizeExternalUrl(item.assets?.cardMedia?.defaultMedia?.src1x);
   return {
     id: item.id,
     title: item.game?.assets?.title ?? item.assets?.title ?? "",
     description: item.assets?.shortformDescription ?? "",
-    url: item.assets?.externalClaimLink ?? null,
+    url: normalizeExternalUrl(item.assets?.externalClaimLink),
     // Prefer the hero banner for the wide slot, falling back to the card image so the slot is
     // never empty; the card also fills the thumbnail slot (both are 16:9 — Prime exposes no
     // portrait art).

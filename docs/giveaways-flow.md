@@ -47,7 +47,11 @@ sequenceDiagram
 
 ## Refresh semantics
 
-- Upstream I/O and shape validation finish before the database transaction starts.
+- Upstream response bodies are streamed with a 5 MiB decoded-size limit before HTML or JSON
+  parsing; declared and undeclared oversized bodies fail the store refresh.
+- Upstream I/O, shape validation, and external URL normalization finish before the database
+  transaction starts. Only credential-free HTTP(S) URLs are persisted; unsafe or malformed URL
+  fields become `null`.
 - A successful empty response deactivates the previous store snapshot and advances its marker.
 - A giveaway omitted by the latest response remains in the table with `is_active = false`.
 - A returning giveaway is reactivated, keeps `first_seen_at`, and advances `last_seen_at`.

@@ -82,7 +82,9 @@ container liveness probe to remain independent of Postgres.
 `GET /giveaways*` is a read-through cache. Each `(store, locale, country)` scope is fresh for
 24 hours. A stale scope fetches live data, replaces its active snapshot transactionally, and then
 serves the cached result. Empty results are cached, failed stores remain stale, and inactive rows
-retain first- and last-seen history.
+retain first- and last-seen history. Upstream HTML and JSON responses are limited to 5 MiB before
+parsing. External giveaway and artwork URLs are canonicalized, restricted to credential-free
+HTTP(S), and stored as `null` when malformed or unsafe.
 
 The schema lives in `src/db/schema.ts`; generated SQL migrations live in `drizzle/`.
 

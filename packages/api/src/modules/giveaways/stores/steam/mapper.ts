@@ -1,4 +1,5 @@
 import type { Giveaway } from "../../model.ts";
+import { normalizeExternalUrl } from "../shared.ts";
 import type { SteamCandidate, SteamFeaturedItem, SteamStoreItem } from "./types.ts";
 
 /**
@@ -46,14 +47,16 @@ function toGiveaway(
     title: featured.name ?? "",
     // Neither the featured item nor the confirm call carries a description.
     description: "",
-    url: confirm.store_url_path
-      ? `https://store.steampowered.com/${confirm.store_url_path}`
-      : `https://store.steampowered.com/app/${featured.id}`,
+    url: normalizeExternalUrl(
+      confirm.store_url_path
+        ? `https://store.steampowered.com/${confirm.store_url_path}`
+        : `https://store.steampowered.com/app/${featured.id}`,
+    ),
     images: {
-      wide: featured.header_image ?? null,
+      wide: normalizeExternalUrl(featured.header_image),
       // Steam's specials feed exposes no portrait artwork.
       tall: null,
-      thumbnail: featured.small_capsule_image ?? null,
+      thumbnail: normalizeExternalUrl(featured.small_capsule_image),
     },
     seller: "Steam",
     price,

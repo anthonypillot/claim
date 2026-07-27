@@ -1,4 +1,5 @@
 import type { Giveaway } from "../../model.ts";
+import { normalizeExternalUrl } from "../shared.ts";
 import type { GogGiveawayProduct, GogGiveawaySection } from "./types.ts";
 
 /**
@@ -22,8 +23,10 @@ function toGiveaway(product: GogGiveawayProduct, freeUntil: string, locale: stri
   // path takes GOG's two-letter language segment, not the full BCP 47 tag.
   const language = locale.split("-")[0] ?? locale;
   const url =
-    product.storeLink ??
-    (product.slug ? `https://www.gog.com/${language}/game/${product.slug}` : null);
+    normalizeExternalUrl(product.storeLink) ??
+    normalizeExternalUrl(
+      product.slug ? `https://www.gog.com/${language}/game/${product.slug}` : null,
+    );
   return {
     // Coerced: the section payload has been observed with both string and numeric ids.
     id: String(product.id ?? ""),
@@ -32,8 +35,8 @@ function toGiveaway(product: GogGiveawayProduct, freeUntil: string, locale: stri
     description: "",
     url,
     images: {
-      wide: product.coverHorizontal ?? null,
-      tall: product.coverVertical ?? null,
+      wide: normalizeExternalUrl(product.coverHorizontal),
+      tall: normalizeExternalUrl(product.coverVertical),
       thumbnail: null,
     },
     // The section payload names no publisher and, being a giveaway, exposes no price.
