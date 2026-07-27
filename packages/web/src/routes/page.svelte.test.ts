@@ -41,9 +41,11 @@ test("shows the adaptive time remaining with the exact deadline available", asyn
 
   const screen = await renderPage(items, Date.parse("2026-07-27T12:00:00.000Z"));
 
-  await expect
-    .element(screen.getByLabelText("5 days left; ends Aug 1, 2026, 12:00 PM UTC"))
-    .toHaveTextContent("5 days left");
+  const expiryBadge = screen.getByLabelText("5 days left; ends Aug 1, 2026, 12:00 PM UTC");
+  await expect.element(expiryBadge).toHaveTextContent("5 days left");
+
+  expiryBadge.element().dispatchEvent(new PointerEvent("pointerenter", { bubbles: true, pointerType: "mouse" }));
+  await expect.element(screen.getByRole("tooltip")).toHaveTextContent("Ends Aug 1, 2026, 12:00 PM UTC");
 });
 
 test("shows giveaways from all stores by default", async () => {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import StoreLogo from "$lib/components/store-logo.svelte";
-  import { Badge, badgeVariants } from "$lib/components/ui/badge";
+  import { badgeVariants } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
   import * as Tooltip from "$lib/components/ui/tooltip";
@@ -15,6 +15,7 @@
   const expiry = $derived(formatExpiry(giveaway.freeUntil));
   const timeLeft = $derived(formatTimeLeft(giveaway.freeUntil, now));
   const expiryLabel = $derived(expiry === "Unknown" ? timeLeft : `${timeLeft}; ends ${expiry} UTC`);
+  const expiryTooltip = $derived(expiry === "Unknown" ? "End date unknown" : `Ends ${expiry} UTC`);
 </script>
 
 <Card.Root class="h-full">
@@ -53,10 +54,17 @@
 
       <dt class="text-muted-foreground">Free until</dt>
       <dd class="text-right">
-        <Badge variant="outline" aria-label={expiryLabel} title={expiryLabel}>
-          <HugeiconsIcon icon={Clock01Icon} data-icon="inline-start" />
-          {timeLeft}
-        </Badge>
+        <Tooltip.Root>
+          <Tooltip.Trigger
+            type="button"
+            class={cn(badgeVariants({ variant: "outline" }), "cursor-help")}
+            aria-label={expiryLabel}
+          >
+            <HugeiconsIcon icon={Clock01Icon} data-icon="inline-start" />
+            {timeLeft}
+          </Tooltip.Trigger>
+          <Tooltip.Content role="tooltip" sideOffset={6}>{expiryTooltip}</Tooltip.Content>
+        </Tooltip.Root>
       </dd>
     </dl>
   </Card.Content>
