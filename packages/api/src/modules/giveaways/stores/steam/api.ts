@@ -1,5 +1,5 @@
 import { createLogger } from "../../../../utils/logger.ts";
-import { isRecord, UpstreamError } from "../shared.ts";
+import { isRecord, readUpstreamJson, UpstreamError } from "../shared.ts";
 import type { SteamCandidate, SteamFeaturedItem, SteamStoreItem } from "./types.ts";
 
 const log = createLogger("steam store");
@@ -39,7 +39,7 @@ async function fetchJson(url: URL): Promise<unknown> {
     if (!response.ok) {
       throw new UpstreamError(STORE, `upstream returned ${response.status}`);
     }
-    return await response.json();
+    return await readUpstreamJson(response, STORE);
   } catch (cause) {
     if (cause instanceof UpstreamError) throw cause;
     throw new UpstreamError(STORE, "upstream request failed", { cause });

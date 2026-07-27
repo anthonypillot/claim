@@ -55,6 +55,21 @@ describe("fetchFreeGames", () => {
     ]);
   });
 
+  it("nulls unsafe upstream image URLs", async () => {
+    const featured = structuredClone(steamFeaturedCategoriesFixture);
+    const game = featured.specials!.items![0]!;
+    game.header_image = "javascript:alert(1)";
+    game.small_capsule_image = "file:///tmp/capsule.jpg";
+    stubFetch({ featured: () => jsonResponse(featured) });
+
+    const [giveaway] = await fetchFreeGames({ locale: "en-US", country: "US" });
+
+    expect(giveaway?.url).toBe(
+      "https://store.steampowered.com/app/100100/Actually_Free_Steam_Game",
+    );
+    expect(giveaway?.images).toEqual({ wide: null, tall: null, thumbnail: null });
+  });
+
   it("fetches featured specials then the store-browse confirm with locale and country", async () => {
     await fetchFreeGames({ locale: "fr-FR", country: "FR" });
 

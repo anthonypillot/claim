@@ -1,5 +1,5 @@
 import { createLogger } from "../../../../utils/logger.ts";
-import { isRecord, UpstreamError } from "../shared.ts";
+import { isRecord, readUpstreamJson, UpstreamError } from "../shared.ts";
 import type { EpicOffer } from "./types.ts";
 
 const EPIC_URL = "https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions";
@@ -117,7 +117,7 @@ export async function fetchFreeGamesPromotions(options: {
     if (!response.ok) {
       throw new UpstreamError("epic-games", `upstream returned ${response.status}`);
     }
-    body = await response.json();
+    body = await readUpstreamJson(response, "epic-games");
   } catch (cause) {
     if (cause instanceof UpstreamError) throw cause;
     throw new UpstreamError("epic-games", "upstream request failed", { cause });
