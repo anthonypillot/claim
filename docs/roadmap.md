@@ -34,6 +34,10 @@ faster on repeat reads and resilient to upstream hiccups:
   from cache instead of hitting the upstream on every request.
 - **Independent stores** — aggregate reads fetch only stale stores, so one failing upstream does not force
   healthy stores to refresh again.
+- **Stale on error** — failed refreshes preserve and serve the last successful snapshot, with degraded stores
+  reported by aggregate reads. A five-minute failure cooldown prevents retry storms.
+- **Refresh coordination** — concurrent requests share refresh work within one process, and a token-guarded
+  60-second Postgres lease prevents duplicate upstream calls across replicas.
 
 ### More stores
 

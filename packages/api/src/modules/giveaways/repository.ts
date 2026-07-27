@@ -1,17 +1,31 @@
-import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { Database } from "../../db/client.ts";
 import type { GiveawayRow, NewGiveawayRow } from "../../db/schema.ts";
 import { giveawayFetches, giveaways } from "../../db/schema.ts";
 import { createLogger } from "../../utils/logger.ts";
 import type { Giveaway, StoreGiveaway, StoreId } from "./model.ts";
-import { CACHE_TTL_HOURS, STORE_IDS } from "./model.ts";
+import {
+  CACHE_TTL_HOURS,
+  REFRESH_FAILURE_COOLDOWN_MINUTES,
+  REFRESH_LEASE_SECONDS,
+  STORE_IDS,
+} from "./model.ts";
 import { normalizeExternalUrl } from "./stores/shared.ts";
 
 const log = createLogger("giveaways repository");
 
 /** A cache slice: a market (locale + country), optionally narrowed to a single store. */
 type Scope = { locale: string; country: string; store?: StoreId };
+type StoreScope = { locale: string; country: string; store: StoreId };
+
+function fetchScopeWhere(scope: StoreScope) {
+  return and(
+    eq(giveawayFetches.store, scope.store),
+    eq(giveawayFetches.locale, scope.locale),
+    eq(giveawayFetches.country, scope.country),
+  );
+}
 
 function toRow(
   store: StoreId,
@@ -91,29 +105,32 @@ export async function refreshStore(
   market: { locale: string; country: string },
   store: StoreId,
   items: Giveaway[],
-): Promise<number> {
+  leaseToken?: string,
+): Promise<number | null> {
   const now = new Date();
   const deduped = new Map(items.map((item) => [item.id, item]));
   const rows = [...deduped.values()].map((item) =>
     toRow(store, item, market.locale, market.country, now),
   );
 
-  await db.transaction(async (tx) => {
-    await tx
-      .insert(giveawayFetches)
-      .values({ store, locale: market.locale, country: market.country })
-      .onConflictDoNothing();
-    await tx
+  const refreshed = await db.transaction(async (tx) => {
+    if (leaseToken === undefined) {
+      await tx
+        .insert(giveawayFetches)
+        .values({ store, locale: market.locale, country: market.country })
+        .onConflictDoNothing();
+    }
+    const markers = await tx
       .select({ store: giveawayFetches.store })
       .from(giveawayFetches)
       .where(
         and(
-          eq(giveawayFetches.store, store),
-          eq(giveawayFetches.locale, market.locale),
-          eq(giveawayFetches.country, market.country),
+          fetchScopeWhere({ ...market, store }),
+          leaseToken === undefined ? undefined : eq(giveawayFetches.leaseToken, leaseToken),
         ),
       )
       .for("update");
+    if (markers.length === 0) return false;
 
     await tx
       .update(giveaways)
@@ -146,18 +163,96 @@ export async function refreshStore(
 
     await tx
       .update(giveawayFetches)
-      .set({ fetchedAt: sql`now()` })
-      .where(
-        and(
-          eq(giveawayFetches.store, store),
-          eq(giveawayFetches.locale, market.locale),
-          eq(giveawayFetches.country, market.country),
-        ),
-      );
+      .set({
+        fetchedAt: sql`now()`,
+        failedAt: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+      })
+      .where(fetchScopeWhere({ ...market, store }));
+    return true;
   });
 
+  if (!refreshed) return null;
   log.debug({ store, ...market, rows: rows.length }, "refreshed store cache");
   return rows.length;
+}
+
+/** Atomically claims a stale scope unless it is cooling down or already leased by another worker. */
+export async function acquireRefreshLease(db: Database, scope: StoreScope): Promise<string | null> {
+  const token = crypto.randomUUID();
+  const rows = await db
+    .insert(giveawayFetches)
+    .values({
+      ...scope,
+      leaseToken: token,
+      leaseExpiresAt: sql`now() + ${REFRESH_LEASE_SECONDS} * interval '1 second'`,
+    })
+    .onConflictDoUpdate({
+      target: [giveawayFetches.store, giveawayFetches.locale, giveawayFetches.country],
+      set: {
+        leaseToken: token,
+        leaseExpiresAt: sql`now() + ${REFRESH_LEASE_SECONDS} * interval '1 second'`,
+      },
+      setWhere: and(
+        or(
+          isNull(giveawayFetches.fetchedAt),
+          lte(giveawayFetches.fetchedAt, sql`now() - ${CACHE_TTL_HOURS} * interval '1 hour'`),
+        ),
+        or(
+          isNull(giveawayFetches.failedAt),
+          lte(
+            giveawayFetches.failedAt,
+            sql`now() - ${REFRESH_FAILURE_COOLDOWN_MINUTES} * interval '1 minute'`,
+          ),
+        ),
+        or(isNull(giveawayFetches.leaseExpiresAt), lte(giveawayFetches.leaseExpiresAt, sql`now()`)),
+      ),
+    })
+    .returning({ token: giveawayFetches.leaseToken });
+  return rows[0]?.token === token ? token : null;
+}
+
+/** Records an upstream failure only while this worker still owns the scope lease. */
+export async function recordRefreshFailure(
+  db: Database,
+  scope: StoreScope,
+  leaseToken: string,
+): Promise<boolean> {
+  const rows = await db
+    .update(giveawayFetches)
+    .set({ failedAt: sql`now()`, leaseToken: null, leaseExpiresAt: null })
+    .where(and(fetchScopeWhere(scope), eq(giveawayFetches.leaseToken, leaseToken)))
+    .returning({ store: giveawayFetches.store });
+  return rows.length === 1;
+}
+
+/** Whether the scope has ever completed successfully, including a successful empty snapshot. */
+export async function hasSuccessfulSnapshot(db: Database, scope: StoreScope): Promise<boolean> {
+  const rows = await db
+    .select({ store: giveawayFetches.store })
+    .from(giveawayFetches)
+    .where(and(fetchScopeWhere(scope), isNotNull(giveawayFetches.fetchedAt)))
+    .limit(1);
+  return rows.length === 1;
+}
+
+/** Whether a recent upstream failure currently suppresses another refresh attempt. */
+export async function isInFailureCooldown(db: Database, scope: StoreScope): Promise<boolean> {
+  const rows = await db
+    .select({ store: giveawayFetches.store })
+    .from(giveawayFetches)
+    .where(
+      and(
+        fetchScopeWhere(scope),
+        gt(
+          giveawayFetches.failedAt,
+          sql`now() - ${REFRESH_FAILURE_COOLDOWN_MINUTES} * interval '1 minute'`,
+        ),
+      ),
+    )
+    .limit(1);
+  return rows.length === 1;
 }
 
 /** Giveaways currently within their free window for the given market. */

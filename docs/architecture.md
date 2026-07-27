@@ -66,7 +66,10 @@ Freshness is tracked independently per `(store, locale, country)`, so aggregate 
 A successful refresh transaction deactivates the store's previous snapshot, upserts the latest rows as active,
 and advances its `giveaway_fetches` marker. Current results require `is_active` and `free_until > now()`;
 inactive rows retain lightweight first/last-seen history. An empty refresh therefore serves empty without
-re-fetching, while an upstream failure leaves the previous scope untouched but stale.
+re-fetching. An upstream failure leaves the previous scope untouched and serves its still-active stale rows;
+aggregate responses list that store in `errors`. Failed scopes cool down for five minutes. Refreshes are
+deduplicated in-process and protected across replicas by a token-guarded 60-second database lease, so a late
+worker cannot overwrite a newer owner's snapshot.
 
 `src/db/` holds shared persistence infrastructure: connection/test plumbing and centralized Drizzle table
 definitions. Following Drizzle's default layout, table definitions live in `src/db/schema.ts`

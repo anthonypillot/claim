@@ -8,8 +8,8 @@ they reach an upstream or become cache keys.
 | --- | --- |
 | Route | `index.ts` - query validation and HTTP error mapping |
 | Service | `service.ts` - per-store freshness and upstream orchestration |
-| Repository | `repository.ts` - transactional refreshes and row/API mapping |
-| DB | `giveaways` history plus `giveaway_fetches` freshness markers |
+| Repository | `repository.ts` - refresh leases, transactional snapshots, and row/API mapping |
+| DB | `giveaways` history plus `giveaway_fetches` freshness, failure, and lease state |
 | Stores | `stores/*` upstream adapters |
 
 ## Aggregate request
@@ -26,22 +26,27 @@ sequenceDiagram
     Client->>Route: GET /giveaways?locale&country
     Note over Route: Validate, canonicalize, reject unsupported values with 422
     Route->>Service: getAllFreeGamesCached(db, market)
-    Service->>Repository: findFreshStoreIds(market)
-    Repository->>DB: Read current giveaway_fetches markers
-    DB-->>Service: Fresh store ids
-    Note over Service: stale = STORE_IDS - fresh
-    Service->>Stores: Fetch only stale stores concurrently
+    Note over Service: Coordinate each scope through an in-process single-flight
+    Service->>Repository: Acquire leases for stale scopes
+    Repository->>DB: Atomic lease upsert per store/locale/country
+    DB-->>Service: Lease owners, fresh scopes, cooldowns, or active leases
+    Service->>Stores: Lease owners fetch stale stores concurrently
     Stores-->>Service: Per-store results or failures
 
     loop Each successful stale store
-        Service->>Repository: refreshStore(market, store, giveaways)
-        Repository->>DB: Transaction: deactivate old rows, upsert active rows, advance marker
+        Service->>Repository: refreshStore(market, store, giveaways, lease token)
+        Repository->>DB: Transaction: verify token, replace snapshot, clear lease/failure
+    end
+
+    loop Each failed stale store
+        Service->>Repository: recordRefreshFailure(market, store, lease token)
+        Repository->>DB: Preserve snapshot, start five-minute cooldown, clear lease
     end
 
     Service->>Repository: findActiveGiveaways(market)
     Repository->>DB: SELECT known stores WHERE is_active AND free_until > now()
     DB-->>Service: Current rows
-    Service-->>Route: Fresh/updated rows plus failed-store errors
+    Service-->>Route: Fresh/updated/stale rows plus degraded-store errors
     Route-->>Client: 200, or 502 when no store has usable data
 ```
 
@@ -55,6 +60,10 @@ sequenceDiagram
 - A successful empty response deactivates the previous store snapshot and advances its marker.
 - A giveaway omitted by the latest response remains in the table with `is_active = false`.
 - A returning giveaway is reactivated, keeps `first_seen_at`, and advances `last_seen_at`.
-- A failed upstream is not written or marked fresh, so only that store is retried next time.
+- A failed upstream is not written or marked fresh. Its last successful snapshot remains active and
+  is served when its giveaway window has not expired.
+- Failed scopes are retried after a five-minute cooldown rather than on every request.
+- Concurrent refreshes share one promise within a process. A token-guarded 60-second database lease
+  prevents multiple replicas from fetching the same scope; expired leases can be reclaimed safely.
 - A database failure rolls back deactivation, upserts, and the freshness marker together.
-- Per-store endpoints use the same `refreshStore` path but check and fetch only one store.
+- Per-store endpoints use the same coordinated refresh path but check and fetch only one store.
