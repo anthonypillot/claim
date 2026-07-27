@@ -3,6 +3,7 @@
   import { ModeWatcher } from "mode-watcher";
   import { onMount } from "svelte";
   import SiteHeader from "$lib/components/site-header.svelte";
+  import * as Tooltip from "$lib/components/ui/tooltip";
   import { getWebUrl } from "$lib/config";
   import "./layout.css";
 
@@ -36,5 +37,7 @@
   <link rel="apple-touch-icon" href="/brand/favicon-180.png" />
 </svelte:head>
 <ModeWatcher />
-<SiteHeader />
-{@render children()}
+<Tooltip.Provider>
+  <SiteHeader />
+  {@render children()}
+</Tooltip.Provider>

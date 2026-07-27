@@ -2,7 +2,7 @@ import type { Giveaway, GiveawaysResponse, StoreId } from "$lib/giveaways/model"
 import { expect, test } from "vitest";
 import { render } from "vitest-browser-svelte";
 import type { PageProps } from "./$types";
-import Page from "./+page.svelte";
+import PageTestWrapper from "./_page-test-wrapper.svelte";
 
 function createGiveaway(id: string, title: string, store: StoreId): Giveaway {
   return {
@@ -29,7 +29,7 @@ async function renderPage(items: GiveawaysResponse) {
     form: null,
   } satisfies PageProps;
 
-  return render(Page, props);
+  return render(PageTestWrapper, props);
 }
 
 test("shows giveaways from all stores by default", async () => {
@@ -49,9 +49,10 @@ test("shows giveaways from all stores by default", async () => {
   expect(screen.getByRole("radio", { name: "Epic Games" }).element().querySelector("img")?.getAttribute("src")).toBe(
     "/stores/epic-games.svg",
   );
-  expect(screen.getByLabelText("Store: Epic Games").element().querySelector("img")?.getAttribute("src")).toBe(
-    "/stores/epic-games.svg",
-  );
+  const storeBadge = screen.getByLabelText("Store: Epic Games");
+  expect(storeBadge.element().querySelector("img")?.getAttribute("src")).toBe("/stores/epic-games.svg");
+  storeBadge.element().dispatchEvent(new PointerEvent("pointerenter", { bubbles: true, pointerType: "mouse" }));
+  await expect.element(screen.getByRole("tooltip")).toHaveTextContent("Epic Games");
   await expect.element(screen.getByText("Epic Giveaway", { exact: true })).toBeInTheDocument();
   await expect.element(screen.getByText("Steam Giveaway", { exact: true })).toBeInTheDocument();
   await expect.element(screen.getByText("2 giveaways")).toBeInTheDocument();

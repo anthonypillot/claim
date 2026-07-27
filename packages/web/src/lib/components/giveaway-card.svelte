@@ -1,9 +1,11 @@
 <script lang="ts">
   import StoreLogo from "$lib/components/store-logo.svelte";
-  import { Badge } from "$lib/components/ui/badge";
+  import { badgeVariants } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
+  import * as Tooltip from "$lib/components/ui/tooltip";
   import { formatExpiry, formatStore, getGiveawayImage, type Giveaway } from "$lib/giveaways/model";
+  import { cn } from "$lib/utils";
   import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
   import { HugeiconsIcon } from "@hugeicons/svelte";
 
@@ -21,9 +23,16 @@
 
   <Card.Header>
     <Card.Action>
-      <Badge variant="outline" class="size-7 p-1" aria-label={`Store: ${formatStore(giveaway.store)}`}>
-        <StoreLogo store={giveaway.store} class="size-5" />
-      </Badge>
+      <Tooltip.Root>
+        <Tooltip.Trigger
+          type="button"
+          class={cn(badgeVariants({ variant: "outline" }), "size-7 cursor-help p-1")}
+          aria-label={`Store: ${formatStore(giveaway.store)}`}
+        >
+          <StoreLogo store={giveaway.store} class="size-5" />
+        </Tooltip.Trigger>
+        <Tooltip.Content role="tooltip" sideOffset={6}>{formatStore(giveaway.store)}</Tooltip.Content>
+      </Tooltip.Root>
     </Card.Action>
     <Card.Title>{giveaway.title}</Card.Title>
     <Card.Description>{giveaway.description}</Card.Description>
