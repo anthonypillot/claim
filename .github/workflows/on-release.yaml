@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    name: 🏗️ Build tagged source
+    name: 🏗️ Build
     runs-on: ubuntu-latest
     env:
       TAG: ${{ github.event.release.tag_name }}
@@ -50,7 +50,10 @@ jobs:
           bun scripts/check-versions.mjs "$version"
           printf 'version=%s\nmajor=%s\nminor=%s.%s\n' "$version" "$major" "$major" "$minor" >> "$GITHUB_OUTPUT"
 
-      - name: 🏗️ Build tagged source
+      - name: 🌐 Install Playwright browser
+        run: bun run --cwd packages/web playwright install --with-deps chromium
+
+      - name: 🏗️ Build
         run: bun run verify
 
   images:

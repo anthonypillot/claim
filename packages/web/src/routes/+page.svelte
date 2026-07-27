@@ -1,15 +1,61 @@
 <script lang="ts">
-  import { AlertCircleIcon, GiftIcon } from "@hugeicons/core-free-icons";
-  import { HugeiconsIcon } from "@hugeicons/svelte";
+  import { pushState } from "$app/navigation";
+  import { page } from "$app/state";
   import BrandLogo from "$lib/components/brand-logo.svelte";
   import GiveawayCard from "$lib/components/giveaway-card.svelte";
+  import GiveawayFilters from "$lib/components/giveaway-filters.svelte";
   import * as Alert from "$lib/components/ui/alert";
-  import { Badge } from "$lib/components/ui/badge";
   import * as Empty from "$lib/components/ui/empty";
+  import {
+    createGiveawayFilterUrl,
+    filterAndSortGiveaways,
+    getStoreCounts,
+    parseGiveawayFilters,
+    type GiveawayFilters as GiveawayFilterState,
+    type StoreFilter,
+  } from "$lib/giveaways/filters";
   import { formatStore } from "$lib/giveaways/model";
+  import { AlertCircleIcon, GiftIcon } from "@hugeicons/core-free-icons";
+  import { HugeiconsIcon } from "@hugeicons/svelte";
+  import { onMount } from "svelte";
   import type { PageProps } from "./$types";
 
-  let { data }: PageProps = $props();
+  let { data, updateFilterUrl = pushFilterUrl }: PageProps & { updateFilterUrl?: (url: URL) => void } = $props();
+
+  let filters = $state(parseGiveawayFilters(page.url.searchParams));
+  let updatedAt = $state<number>();
+  const now = $derived(updatedAt ?? data.loadedAt);
+  const storeCounts = $derived(getStoreCounts(data.items.giveaways));
+  const visibleGiveaways = $derived(filterAndSortGiveaways(data.items.giveaways, filters));
+
+  onMount(() => {
+    const timer = window.setInterval(() => {
+      updatedAt = Date.now();
+    }, 60_000);
+
+    return () => window.clearInterval(timer);
+  });
+
+  $effect(() => {
+    filters = parseGiveawayFilters(page.url.searchParams);
+  });
+
+  function pushFilterUrl(url: URL): void {
+    pushState(url, page.state);
+  }
+
+  function updateFilters(nextFilters: GiveawayFilterState): void {
+    filters = nextFilters;
+    updateFilterUrl(createGiveawayFilterUrl(page.url, nextFilters));
+  }
+
+  function updateSelectedStore(store: StoreFilter): void {
+    updateFilters({ ...filters, store });
+  }
+
+  function updateEndingSoon(endingSoon: boolean): void {
+    updateFilters({ ...filters, sort: endingSoon ? "ending-soon" : "default" });
+  }
 </script>
 
 <svelte:head>
@@ -18,10 +64,7 @@
 </svelte:head>
 
 <main class="mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-7xl flex-col gap-10 px-5 py-10 sm:px-8 lg:py-14">
-  <section
-    aria-labelledby="page-title"
-    class="flex w-full flex-col items-start gap-5 border-b pb-8 sm:flex-row sm:items-end sm:justify-between"
-  >
+  <section aria-labelledby="page-title" class="flex w-full flex-col items-start gap-5 border-b pb-8">
     <div class="flex max-w-2xl flex-col items-start gap-3">
       <BrandLogo kind="lockup" alt="Claim" class="mb-3 h-auto w-64 sm:w-80" />
       <p class="text-primary text-sm font-medium tracking-widest uppercase">Free to keep</p>
@@ -30,11 +73,15 @@
         Current giveaways from Epic Games, Prime Gaming, GOG, and Steam, gathered in one place.
       </p>
     </div>
-    <Badge variant="secondary">
-      {data.items.count}
-      {data.items.count === 1 ? "giveaway" : "giveaways"}
-    </Badge>
   </section>
+
+  <GiveawayFilters
+    counts={storeCounts}
+    selectedStore={filters.store}
+    endingSoon={filters.sort === "ending-soon"}
+    onStoreChange={updateSelectedStore}
+    onEndingSoonChange={updateEndingSoon}
+  />
 
   {#if data.items.errors.length > 0}
     <Alert.Root>
@@ -50,12 +97,12 @@
     </Alert.Root>
   {/if}
 
-  {#if data.items.giveaways.length > 0}
+  {#if visibleGiveaways.length > 0}
     <section aria-labelledby="giveaway-list-title">
       <h2 id="giveaway-list-title" class="sr-only">Available giveaways</h2>
       <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-        {#each data.items.giveaways as giveaway (`${giveaway.store}:${giveaway.id}`)}
-          <GiveawayCard {giveaway} />
+        {#each visibleGiveaways as giveaway (`${giveaway.store}:${giveaway.id}`)}
+          <GiveawayCard {giveaway} {now} />
         {/each}
       </div>
     </section>
@@ -65,8 +112,16 @@
         <Empty.Media variant="icon">
           <HugeiconsIcon icon={GiftIcon} />
         </Empty.Media>
-        <Empty.Title>No giveaways available</Empty.Title>
-        <Empty.Description>There are no active free-to-keep games right now. Check back soon.</Empty.Description>
+        {#if filters.store === "all"}
+          <Empty.Title>No giveaways available</Empty.Title>
+          <Empty.Description>There are no active free-to-keep games right now. Check back soon.</Empty.Description>
+        {:else}
+          <Empty.Title>No {formatStore(filters.store)} giveaways available</Empty.Title>
+          <Empty.Description>
+            There are no active free-to-keep games from {formatStore(filters.store)} right now. Try another store or check
+            back soon.
+          </Empty.Description>
+        {/if}
       </Empty.Header>
     </Empty.Root>
   {/if}

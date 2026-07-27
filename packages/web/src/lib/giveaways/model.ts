@@ -1,4 +1,6 @@
-export type StoreId = "epic-games" | "prime-gaming" | "gog" | "steam";
+export const STORE_IDS = ["epic-games", "prime-gaming", "gog", "steam"] as const;
+
+export type StoreId = (typeof STORE_IDS)[number];
 
 export type GiveawayImages = {
   wide: string | null;
@@ -41,6 +43,10 @@ const expiryFormatter = new Intl.DateTimeFormat("en", {
   timeZone: "UTC",
 });
 
+const MINUTE_IN_MS = 60_000;
+const HOUR_IN_MS = 60 * MINUTE_IN_MS;
+const DAY_IN_MS = 24 * HOUR_IN_MS;
+
 export function getGiveawayImage(images: GiveawayImages): string | null {
   return images.wide ?? images.thumbnail ?? images.tall;
 }
@@ -52,4 +58,20 @@ export function formatStore(store: StoreId): string {
 export function formatExpiry(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Unknown" : expiryFormatter.format(date).replace(" at ", ", ");
+}
+
+export function formatTimeLeft(value: string, now: number): string {
+  const expiry = Date.parse(value);
+  if (Number.isNaN(expiry)) return "End time unknown";
+
+  const remaining = expiry - now;
+  if (remaining <= 0) return "Ended";
+
+  if (remaining < HOUR_IN_MS) return formatRemainingUnit(Math.ceil(remaining / MINUTE_IN_MS), "minute");
+  if (remaining < DAY_IN_MS) return formatRemainingUnit(Math.ceil(remaining / HOUR_IN_MS), "hour");
+  return formatRemainingUnit(Math.ceil(remaining / DAY_IN_MS), "day");
+}
+
+function formatRemainingUnit(value: number, unit: "minute" | "hour" | "day"): string {
+  return `${value} ${unit}${value === 1 ? "" : "s"} left`;
 }
