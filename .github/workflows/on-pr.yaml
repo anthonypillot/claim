@@ -47,8 +47,11 @@ jobs:
       - name: 🔎 Check web
         run: bun run --cwd packages/web check
 
+      - name: 🌐 Install Playwright browser
+        run: bun run --cwd packages/web playwright install --with-deps chromium
+
       - name: 🧪 Test
-        run: bun test
+        run: bun run test
 
       - name: 🏗️ Build
         run: bun run build

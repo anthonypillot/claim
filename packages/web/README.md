@@ -2,6 +2,11 @@
 
 Claim Web is the SvelteKit frontend for browsing the free-game giveaways exposed by Claim API.
 
+The giveaway toolbar filters by storefront and can order the visible games by nearest expiry. Cards
+show the remaining time in adaptive day, hour, or minute units. Toolbar state is shareable through
+the optional `store` and `sort=ending-soon` query parameters; default filters are omitted from the
+URL.
+
 ## Stack
 
 - SvelteKit 2 and Svelte 5 with runes mode forced for project files

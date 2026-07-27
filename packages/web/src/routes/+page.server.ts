@@ -11,5 +11,5 @@ export const load: PageServerLoad = async ({ fetch }) => {
   }
 
   const items: GiveawaysResponse = await response.json();
-  return { items };
+  return { items, loadedAt: Date.now() };
 };

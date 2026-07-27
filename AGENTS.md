@@ -17,7 +17,7 @@ Run workspace commands from the repository root:
 ```bash
 bun install
 bun run dev              # API :3000 and Vite dev server
-bun test                 # both workspaces
+bun run test             # both workspaces
 bun run build            # both workspaces
 bun run lint
 bun run format:check

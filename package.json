@@ -24,7 +24,7 @@
     "format:check": "bun run --workspaces --if-present format:check",
     "typecheck": "bun run --workspaces --if-present typecheck",
     "version:check": "bun scripts/check-versions.mjs",
-    "verify": "bun run version:check && bun run lint && bun run format:check && bun run typecheck && bun run --cwd packages/web check && bun test && bun run build"
+    "verify": "bun run version:check && bun run lint && bun run format:check && bun run typecheck && bun run --cwd packages/web check && bun run test && bun run build"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^7.0.0",
