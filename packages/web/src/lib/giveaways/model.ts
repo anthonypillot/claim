@@ -1,4 +1,6 @@
-export type StoreId = "epic-games" | "prime-gaming" | "gog" | "steam";
+export const STORE_IDS = ["epic-games", "prime-gaming", "gog", "steam"] as const;
+
+export type StoreId = (typeof STORE_IDS)[number];
 
 export type GiveawayImages = {
   wide: string | null;

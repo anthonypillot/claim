@@ -1,15 +1,11 @@
 <script lang="ts">
-  import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
-  import { HugeiconsIcon } from "@hugeicons/svelte";
+  import StoreLogo from "$lib/components/store-logo.svelte";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
-  import {
-    formatExpiry,
-    formatStore,
-    getGiveawayImage,
-    type Giveaway,
-  } from "$lib/giveaways/model";
+  import { formatExpiry, formatStore, getGiveawayImage, type Giveaway } from "$lib/giveaways/model";
+  import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
+  import { HugeiconsIcon } from "@hugeicons/svelte";
 
   let { giveaway }: { giveaway: Giveaway } = $props();
 
@@ -18,21 +14,16 @@
 
 <Card.Root class="h-full">
   {#if image}
-    <img
-      src={image}
-      alt="Artwork for {giveaway.title}"
-      class="aspect-video w-full object-cover"
-      loading="lazy"
-    />
+    <img src={image} alt="Artwork for {giveaway.title}" class="aspect-video w-full object-cover" loading="lazy" />
   {:else}
-    <div class="bg-muted text-muted-foreground flex aspect-video items-center justify-center">
-      Artwork unavailable
-    </div>
+    <div class="bg-muted text-muted-foreground flex aspect-video items-center justify-center">Artwork unavailable</div>
   {/if}
 
   <Card.Header>
     <Card.Action>
-      <Badge variant="outline">{formatStore(giveaway.store)}</Badge>
+      <Badge variant="outline" class="size-7 p-1" aria-label={`Store: ${formatStore(giveaway.store)}`}>
+        <StoreLogo store={giveaway.store} class="size-5" />
+      </Badge>
     </Card.Action>
     <Card.Title>{giveaway.title}</Card.Title>
     <Card.Description>{giveaway.description}</Card.Description>
@@ -54,13 +45,7 @@
   </Card.Content>
 
   <Card.Footer>
-    <Button
-      href={giveaway.url ?? undefined}
-      disabled={!giveaway.url}
-      target="_blank"
-      rel="noreferrer"
-      class="w-full"
-    >
+    <Button href={giveaway.url ?? undefined} disabled={!giveaway.url} target="_blank" rel="noreferrer" class="w-full">
       {giveaway.url ? "View giveaway" : "Store link unavailable"}
       {#if giveaway.url}
         <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />
