@@ -98,6 +98,19 @@ async function refreshMarket(steamGiveaways: Giveaway[] = []): Promise<void> {
   );
 }
 
+async function ageStore(store: (typeof STORE_IDS)[number]): Promise<void> {
+  await db
+    .update(giveawayFetchesTable)
+    .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` })
+    .where(eq(giveawayFetchesTable.store, store));
+}
+
+async function ageMarket(): Promise<void> {
+  await db
+    .update(giveawayFetchesTable)
+    .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` });
+}
+
 beforeAll(async () => {
   context = await createTestDatabase();
   db = context.db;
@@ -326,10 +339,7 @@ describe("GET /giveaways (read-through cache)", () => {
   it("re-fetches when a store's cache has passed the TTL", async () => {
     await refreshMarket([cachedSteamGiveaway()]);
     // Age one store's marker past the TTL; only that store should be refreshed.
-    await db
-      .update(giveawayFetchesTable)
-      .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` })
-      .where(eq(giveawayFetchesTable.store, "gog"));
+    await ageStore("gog");
     fetchSpy.mockClear();
 
     const response = await app.handle(new Request(ALL_URL));
@@ -364,10 +374,7 @@ describe("GET /giveaways (read-through cache)", () => {
 
   it("deactivates a giveaway omitted by a successful stale-store refresh", async () => {
     await refreshMarket([cachedSteamGiveaway()]);
-    await db
-      .update(giveawayFetchesTable)
-      .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` })
-      .where(eq(giveawayFetchesTable.store, "steam"));
+    await ageStore("steam");
     fetchSpy.mockImplementation(((input: string | URL | Request) => {
       const url = String(input instanceof Request ? input.url : input);
       if (url.includes("featuredcategories")) {
@@ -428,6 +435,82 @@ describe("GET /giveaways (read-through cache)", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ store: "steam", count: 0, giveaways: [] });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("serves a stale per-store snapshot when its refresh fails", async () => {
+    await refreshStore(db, MARKET_US, "steam", [cachedSteamGiveaway()]);
+    await ageStore("steam");
+    fetchSpy.mockRejectedValue(new Error("network down"));
+
+    const response = await app.handle(new Request(STEAM_URL));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      store: "steam",
+      count: 1,
+      giveaways: [{ id: "100100", title: "Cached Steam Game" }],
+    });
+  });
+
+  it("serves all stale snapshots and reports degradation when every refresh fails", async () => {
+    await refreshMarket([cachedSteamGiveaway()]);
+    await ageMarket();
+    fetchSpy.mockRejectedValue(new Error("network down"));
+
+    const response = await app.handle(new Request(ALL_URL));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      count: 1,
+      giveaways: [
+        expect.objectContaining({ store: "steam", id: "100100", title: "Cached Steam Game" }),
+      ],
+      errors: STORE_IDS.map((store) => ({
+        store,
+        error: `Failed to fetch giveaways from ${store}`,
+      })),
+    });
+  });
+
+  it("does not retry a cold failure during the cooldown", async () => {
+    fetchSpy.mockRejectedValue(new Error("network down"));
+
+    const first = await app.handle(new Request(STEAM_URL));
+    const second = await app.handle(new Request(STEAM_URL));
+
+    expect(first.status).toBe(502);
+    expect(second.status).toBe(502);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates concurrent misses for the same scope", async () => {
+    let releaseFetch: (() => void) | undefined;
+    let signalStarted: (() => void) | undefined;
+    const fetchStarted = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+    const fetchGate = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    fetchSpy.mockImplementation((async (input: string | URL | Request) => {
+      if (String(input instanceof Request ? input.url : input).includes("epicgames.com")) {
+        signalStarted?.();
+        await fetchGate;
+      }
+      return stubUpstreamFetch(input);
+    }) as typeof fetch);
+
+    const first = app.handle(new Request(EPIC_URL));
+    await fetchStarted;
+    const second = app.handle(new Request(EPIC_URL));
+    await Bun.sleep(10);
+
+    expect(
+      fetchSpy.mock.calls.filter(([input]) => String(input).includes("epicgames.com")),
+    ).toHaveLength(1);
+    releaseFetch?.();
+    const responses = await Promise.all([first, second]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
   });
 });
 

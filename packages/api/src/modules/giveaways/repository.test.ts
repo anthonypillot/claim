@@ -4,11 +4,15 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { giveawayFetches, giveaways } from "../../db/schema.ts";
 import { createTestDatabase } from "../../db/testing.ts";
-import { CACHE_TTL_HOURS, type Giveaway } from "./model.ts";
+import { CACHE_TTL_HOURS, type Giveaway, REFRESH_FAILURE_COOLDOWN_MINUTES } from "./model.ts";
 import {
+  acquireRefreshLease,
   findActiveGiveaways,
   findFreshStoreIds,
+  hasSuccessfulSnapshot,
+  isInFailureCooldown,
   isFresh,
+  recordRefreshFailure,
   refreshStore,
   toStoreGiveaway,
 } from "./repository.ts";
@@ -208,5 +212,86 @@ describe("freshness", () => {
 
     expect(await findFreshStoreIds(db, MARKET)).toEqual(["steam"]);
     expect(await isFresh(db, { ...MARKET, store: "gog" })).toBe(false);
+  });
+});
+
+describe("refresh coordination", () => {
+  it("grants only one concurrent lease for a scope", async () => {
+    const tokens = await Promise.all([
+      acquireRefreshLease(db, { ...MARKET, store: "steam" }),
+      acquireRefreshLease(db, { ...MARKET, store: "steam" }),
+    ]);
+
+    expect(tokens.filter((token) => token !== null)).toHaveLength(1);
+  });
+
+  it("isolates leases by store and market", async () => {
+    const tokens = await Promise.all([
+      acquireRefreshLease(db, { ...MARKET, store: "steam" }),
+      acquireRefreshLease(db, { ...MARKET, store: "gog" }),
+      acquireRefreshLease(db, { locale: "fr-FR", country: "FR", store: "steam" }),
+    ]);
+
+    expect(tokens.every((token) => token !== null)).toBe(true);
+  });
+
+  it("preserves a stale snapshot and applies cooldown after failure", async () => {
+    await refreshStore(db, MARKET, "steam", [giveaway()]);
+    await db
+      .update(giveawayFetches)
+      .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` })
+      .where(eq(giveawayFetches.store, "steam"));
+    const token = await acquireRefreshLease(db, { ...MARKET, store: "steam" });
+    if (token === null) throw new Error("expected refresh lease");
+
+    expect(await recordRefreshFailure(db, { ...MARKET, store: "steam" }, token)).toBe(true);
+
+    expect(await findActiveGiveaways(db, { ...MARKET, store: "steam" })).toHaveLength(1);
+    expect(await hasSuccessfulSnapshot(db, { ...MARKET, store: "steam" })).toBe(true);
+    expect(await isInFailureCooldown(db, { ...MARKET, store: "steam" })).toBe(true);
+    expect(await acquireRefreshLease(db, { ...MARKET, store: "steam" })).toBeNull();
+  });
+
+  it("retries after the failure cooldown expires", async () => {
+    const scope = { ...MARKET, store: "steam" } as const;
+    const firstToken = await acquireRefreshLease(db, scope);
+    if (firstToken === null) throw new Error("expected refresh lease");
+    await recordRefreshFailure(db, scope, firstToken);
+    await db
+      .update(giveawayFetches)
+      .set({
+        failedAt: sql`now() - ${REFRESH_FAILURE_COOLDOWN_MINUTES + 1} * interval '1 minute'`,
+      })
+      .where(eq(giveawayFetches.store, "steam"));
+
+    expect(await acquireRefreshLease(db, scope)).not.toBeNull();
+  });
+
+  it("allows an expired lease to be reclaimed and rejects the old token", async () => {
+    const scope = { ...MARKET, store: "steam" } as const;
+    const oldToken = await acquireRefreshLease(db, scope);
+    if (oldToken === null) throw new Error("expected refresh lease");
+    await db
+      .update(giveawayFetches)
+      .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
+      .where(eq(giveawayFetches.store, "steam"));
+
+    const newToken = await acquireRefreshLease(db, scope);
+    expect(newToken).not.toBeNull();
+    expect(newToken).not.toBe(oldToken);
+    expect(await refreshStore(db, MARKET, "steam", [giveaway()], oldToken)).toBeNull();
+    expect(await hasSuccessfulSnapshot(db, scope)).toBe(false);
+  });
+
+  it("clears failure and lease state after a successful refresh", async () => {
+    const scope = { ...MARKET, store: "steam" } as const;
+    const token = await acquireRefreshLease(db, scope);
+    if (token === null) throw new Error("expected refresh lease");
+
+    expect(await refreshStore(db, MARKET, "steam", [], token)).toBe(0);
+
+    const [marker] = await db.select().from(giveawayFetches);
+    expect(marker).toMatchObject({ failedAt: null, leaseToken: null, leaseExpiresAt: null });
+    expect(marker?.fetchedAt).toBeInstanceOf(Date);
   });
 });

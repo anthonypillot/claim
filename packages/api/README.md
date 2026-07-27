@@ -30,8 +30,8 @@ All giveaway endpoints accept optional `locale` and `country` query parameters. 
 and canonicalized before they reach an upstream or become cache keys.
 
 The aggregate endpoint returns currently available offers tagged with their store. If one upstream
-fails while other stores have usable data, it still returns HTTP 200 and lists that store in
-`errors`.
+cannot be refreshed, its last successful snapshot is served when available and the store is listed
+in `errors`. The endpoint returns 502 only when no store has ever completed a successful refresh.
 
 ## Local development
 
@@ -81,10 +81,13 @@ container liveness probe to remain independent of Postgres.
 
 `GET /giveaways*` is a read-through cache. Each `(store, locale, country)` scope is fresh for
 24 hours. A stale scope fetches live data, replaces its active snapshot transactionally, and then
-serves the cached result. Empty results are cached, failed stores remain stale, and inactive rows
-retain first- and last-seen history. Upstream HTML and JSON responses are limited to 5 MiB before
-parsing. External giveaway and artwork URLs are canonicalized, restricted to credential-free
-HTTP(S), and stored as `null` when malformed or unsafe.
+serves the cached result. Empty results are cached. A failed refresh preserves and serves the last
+successful snapshot, reports degraded freshness in aggregate `errors`, and waits five minutes
+before retrying. Concurrent refreshes share one in-process request, while a 60-second database lease
+prevents duplicate upstream calls across replicas. Inactive rows retain first- and last-seen
+history. Upstream HTML and JSON responses are limited to 5 MiB before parsing. External giveaway
+and artwork URLs are canonicalized, restricted to credential-free HTTP(S), and stored as `null`
+when malformed or unsafe.
 
 The schema lives in `src/db/schema.ts`; generated SQL migrations live in `drizzle/`.
 

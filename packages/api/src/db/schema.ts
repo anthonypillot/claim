@@ -60,17 +60,27 @@ export const giveaways = pgTable(
 export type GiveawayRow = typeof giveaways.$inferSelect;
 export type NewGiveawayRow = typeof giveaways.$inferInsert;
 
-// Records when a (store, locale, country) was last fetched from upstream. This is the cache's TTL freshness
-// signal: a scope is "fresh" when its `fetched_at` is within CACHE_TTL_HOURS. Unlike a giveaway-row count it
-// stays meaningful for a store that was fetched but produced zero giveaways, so an empty store is served from
-// cache instead of re-fetched on every request.
+// Records refresh state for a (store, locale, country). A nullable fetched_at distinguishes a cold failed
+// scope from a successful empty snapshot, while the lease columns coordinate refreshes across replicas.
 export const giveawayFetches = pgTable(
   "giveaway_fetches",
   {
     store: text("store").notNull(),
     locale: text("locale").notNull(),
     country: text("country").notNull(),
-    fetchedAt: timestamp("fetched_at", seenAt).notNull().defaultNow(),
+    fetchedAt: timestamp("fetched_at", seenAt),
+    failedAt: timestamp("failed_at", seenAt),
+    leaseToken: text("lease_token"),
+    leaseExpiresAt: timestamp("lease_expires_at", seenAt),
   },
-  (table) => [primaryKey({ columns: [table.store, table.locale, table.country] })],
+  (table) => [
+    primaryKey({ columns: [table.store, table.locale, table.country] }),
+    check(
+      "giveaway_fetches_lease_all_or_none",
+      sql`(
+        ("lease_token" is null and "lease_expires_at" is null)
+        or ("lease_token" is not null and "lease_expires_at" is not null)
+      )`,
+    ),
+  ],
 );
