@@ -1,17 +1,20 @@
 <script lang="ts">
   import StoreLogo from "$lib/components/store-logo.svelte";
-  import { badgeVariants } from "$lib/components/ui/badge";
+  import { Badge, badgeVariants } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import { formatExpiry, formatStore, getGiveawayImage, type Giveaway } from "$lib/giveaways/model";
+  import { formatExpiry, formatStore, formatTimeLeft, getGiveawayImage, type Giveaway } from "$lib/giveaways/model";
   import { cn } from "$lib/utils";
-  import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
+  import { ArrowUpRight01Icon, Clock01Icon } from "@hugeicons/core-free-icons";
   import { HugeiconsIcon } from "@hugeicons/svelte";
 
-  let { giveaway }: { giveaway: Giveaway } = $props();
+  let { giveaway, now }: { giveaway: Giveaway; now: number } = $props();
 
   const image = $derived(getGiveawayImage(giveaway.images));
+  const expiry = $derived(formatExpiry(giveaway.freeUntil));
+  const timeLeft = $derived(formatTimeLeft(giveaway.freeUntil, now));
+  const expiryLabel = $derived(expiry === "Unknown" ? timeLeft : `${timeLeft}; ends ${expiry} UTC`);
 </script>
 
 <Card.Root class="h-full">
@@ -45,11 +48,16 @@
 
       {#if giveaway.price}
         <dt class="text-muted-foreground">Original price</dt>
-        <dd class="text-right">{giveaway.price.formatted}</dd>
+        <dd class="text-muted-foreground text-right"><s class="line-through">{giveaway.price.formatted}</s></dd>
       {/if}
 
       <dt class="text-muted-foreground">Free until</dt>
-      <dd class="text-right">{formatExpiry(giveaway.freeUntil)} UTC</dd>
+      <dd class="text-right">
+        <Badge variant="outline" aria-label={expiryLabel} title={expiryLabel}>
+          <HugeiconsIcon icon={Clock01Icon} data-icon="inline-start" />
+          {timeLeft}
+        </Badge>
+      </dd>
     </dl>
   </Card.Content>
 

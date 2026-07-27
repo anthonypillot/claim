@@ -4,7 +4,7 @@ import { render } from "vitest-browser-svelte";
 import type { PageProps } from "./$types";
 import PageTestWrapper from "./_page-test-wrapper.svelte";
 
-function createGiveaway(id: string, title: string, store: StoreId): Giveaway {
+function createGiveaway(id: string, title: string, store: StoreId, freeUntil = "2099-12-31T00:00:00.000Z"): Giveaway {
   return {
     id,
     title,
@@ -17,14 +17,14 @@ function createGiveaway(id: string, title: string, store: StoreId): Giveaway {
     },
     seller: "Publisher",
     price: null,
-    freeUntil: "2099-12-31T00:00:00.000Z",
+    freeUntil,
     store,
   };
 }
 
-async function renderPage(items: GiveawaysResponse) {
+async function renderPage(items: GiveawaysResponse, loadedAt = Date.parse("2099-01-01T00:00:00.000Z")) {
   const props = {
-    data: { items },
+    data: { items, loadedAt },
     params: {},
     form: null,
   } satisfies PageProps;
@@ -32,11 +32,28 @@ async function renderPage(items: GiveawaysResponse) {
   return render(PageTestWrapper, props);
 }
 
+test("shows the adaptive time remaining with the exact deadline available", async () => {
+  const items = {
+    count: 1,
+    giveaways: [createGiveaway("epic", "Epic Giveaway", "epic-games", "2026-08-01T12:00:00.000Z")],
+    errors: [],
+  } satisfies GiveawaysResponse;
+
+  const screen = await renderPage(items, Date.parse("2026-07-27T12:00:00.000Z"));
+
+  await expect
+    .element(screen.getByLabelText("5 days left; ends Aug 1, 2026, 12:00 PM UTC"))
+    .toHaveTextContent("5 days left");
+});
+
 test("shows giveaways from all stores by default", async () => {
   const items = {
     count: 2,
     giveaways: [
-      createGiveaway("epic", "Epic Giveaway", "epic-games"),
+      {
+        ...createGiveaway("epic", "Epic Giveaway", "epic-games"),
+        price: { original: 1999, formatted: "$19.99", currency: "USD" },
+      },
       createGiveaway("steam", "Steam Giveaway", "steam"),
     ],
     errors: [],
@@ -44,8 +61,12 @@ test("shows giveaways from all stores by default", async () => {
 
   const screen = await renderPage(items);
 
-  await expect.element(screen.getByRole("radio", { name: "All stores" })).toHaveAttribute("aria-checked", "true");
-  await expect.element(screen.getByRole("radio", { name: "Epic Games" })).toHaveAttribute("aria-checked", "false");
+  await expect
+    .element(screen.getByRole("radio", { name: "All stores, 2 giveaways", exact: true }))
+    .toHaveAttribute("aria-checked", "true");
+  await expect
+    .element(screen.getByRole("radio", { name: "Epic Games, 1 giveaway", exact: true }))
+    .toHaveAttribute("aria-checked", "false");
   expect(screen.getByRole("radio", { name: "Epic Games" }).element().querySelector("img")?.getAttribute("src")).toBe(
     "/stores/epic-games.svg",
   );
@@ -53,9 +74,9 @@ test("shows giveaways from all stores by default", async () => {
   expect(storeBadge.element().querySelector("img")?.getAttribute("src")).toBe("/stores/epic-games.svg");
   storeBadge.element().dispatchEvent(new PointerEvent("pointerenter", { bubbles: true, pointerType: "mouse" }));
   await expect.element(screen.getByRole("tooltip")).toHaveTextContent("Epic Games");
+  await expect.element(screen.getByText("$19.99", { exact: true })).toHaveClass("line-through");
   await expect.element(screen.getByText("Epic Giveaway", { exact: true })).toBeInTheDocument();
   await expect.element(screen.getByText("Steam Giveaway", { exact: true })).toBeInTheDocument();
-  await expect.element(screen.getByText("2 giveaways")).toBeInTheDocument();
 });
 
 test("filters giveaways by store and keeps partial-store errors visible", async () => {
@@ -75,8 +96,8 @@ test("filters giveaways by store and keeps partial-store errors visible", async 
   await expect.element(screen.getByRole("radio", { name: "All stores" })).toHaveAttribute("aria-checked", "false");
   await expect.element(screen.getByText("Steam Giveaway", { exact: true })).toBeInTheDocument();
   await expect.element(screen.getByText("Epic Giveaway", { exact: true })).not.toBeInTheDocument();
-  await expect.element(screen.getByText("1 giveaway")).toBeInTheDocument();
   await expect.element(screen.getByRole("alert")).toHaveTextContent("GOG: Refresh failed");
+  await expect.element(screen.getByRole("radio", { name: "GOG, 0 giveaways", exact: true })).toBeInTheDocument();
 });
 
 test("shows a store-specific empty state", async () => {
@@ -89,10 +110,36 @@ test("shows a store-specific empty state", async () => {
   const screen = await renderPage(items);
   await screen.getByRole("radio", { name: "GOG" }).click();
 
-  await expect.element(screen.getByText("0 giveaways")).toBeInTheDocument();
   await expect.element(screen.getByText("No GOG giveaways available")).toBeInTheDocument();
   await expect
     .element(screen.getByText(/There are no active free-to-keep games from GOG right now/))
     .toBeInTheDocument();
   await expect.element(screen.getByText("Epic Giveaway", { exact: true })).not.toBeInTheDocument();
+});
+
+test("sorts visible giveaways by expiry and restores API order", async () => {
+  const items = {
+    count: 3,
+    giveaways: [
+      createGiveaway("later", "Later Giveaway", "epic-games", "2099-12-31T00:00:00.000Z"),
+      createGiveaway("other", "Other Giveaway", "gog", "2099-10-31T00:00:00.000Z"),
+      createGiveaway("sooner", "Sooner Giveaway", "steam", "2099-11-30T00:00:00.000Z"),
+    ],
+    errors: [],
+  } satisfies GiveawaysResponse;
+
+  const screen = await renderPage(items);
+  const endingSoon = screen.getByRole("button", { name: "Sort by ending soon" });
+
+  await endingSoon.click();
+  await expect.element(endingSoon).toHaveAttribute("aria-pressed", "true");
+  expect(
+    Array.from(document.querySelectorAll<HTMLElement>("[data-slot=card-title]"), (title) => title.innerText),
+  ).toEqual(["Other Giveaway", "Sooner Giveaway", "Later Giveaway"]);
+
+  await endingSoon.click();
+  await expect.element(endingSoon).toHaveAttribute("aria-pressed", "false");
+  expect(
+    Array.from(document.querySelectorAll<HTMLElement>("[data-slot=card-title]"), (title) => title.innerText),
+  ).toEqual(["Later Giveaway", "Other Giveaway", "Sooner Giveaway"]);
 });

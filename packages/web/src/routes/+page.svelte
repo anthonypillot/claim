@@ -1,36 +1,60 @@
 <script lang="ts">
+  import { pushState } from "$app/navigation";
+  import { page } from "$app/state";
   import BrandLogo from "$lib/components/brand-logo.svelte";
   import GiveawayCard from "$lib/components/giveaway-card.svelte";
-  import StoreLogo from "$lib/components/store-logo.svelte";
+  import GiveawayFilters from "$lib/components/giveaway-filters.svelte";
   import * as Alert from "$lib/components/ui/alert";
-  import { Badge } from "$lib/components/ui/badge";
   import * as Empty from "$lib/components/ui/empty";
-  import * as ToggleGroup from "$lib/components/ui/toggle-group";
-  import { formatStore, STORE_IDS, type StoreId } from "$lib/giveaways/model";
+  import {
+    createGiveawayFilterUrl,
+    filterAndSortGiveaways,
+    getStoreCounts,
+    parseGiveawayFilters,
+    type GiveawayFilters as GiveawayFilterState,
+    type StoreFilter,
+  } from "$lib/giveaways/filters";
+  import { formatStore } from "$lib/giveaways/model";
   import { AlertCircleIcon, GiftIcon } from "@hugeicons/core-free-icons";
   import { HugeiconsIcon } from "@hugeicons/svelte";
+  import { onMount } from "svelte";
   import type { PageProps } from "./$types";
 
-  let { data }: PageProps = $props();
+  let { data, updateFilterUrl = pushFilterUrl }: PageProps & { updateFilterUrl?: (url: URL) => void } = $props();
 
-  type StoreFilter = "all" | StoreId;
+  let filters = $state(parseGiveawayFilters(page.url.searchParams));
+  let updatedAt = $state<number>();
+  const now = $derived(updatedAt ?? data.loadedAt);
+  const storeCounts = $derived(getStoreCounts(data.items.giveaways));
+  const visibleGiveaways = $derived(filterAndSortGiveaways(data.items.giveaways, filters));
 
-  let selectedStore = $state<StoreFilter>("all");
+  onMount(() => {
+    const timer = window.setInterval(() => {
+      updatedAt = Date.now();
+    }, 60_000);
 
-  const visibleGiveaways = $derived(
-    selectedStore === "all"
-      ? data.items.giveaways
-      : data.items.giveaways.filter((giveaway) => giveaway.store === selectedStore),
-  );
+    return () => window.clearInterval(timer);
+  });
 
-  function updateSelectedStore(value: string): void {
-    if (value === "all") {
-      selectedStore = value;
-      return;
-    }
+  $effect(() => {
+    filters = parseGiveawayFilters(page.url.searchParams);
+  });
 
-    const store = STORE_IDS.find((storeId) => storeId === value);
-    if (store) selectedStore = store;
+  function pushFilterUrl(url: URL): void {
+    pushState(url, page.state);
+  }
+
+  function updateFilters(nextFilters: GiveawayFilterState): void {
+    filters = nextFilters;
+    updateFilterUrl(createGiveawayFilterUrl(page.url, nextFilters));
+  }
+
+  function updateSelectedStore(store: StoreFilter): void {
+    updateFilters({ ...filters, store });
+  }
+
+  function updateEndingSoon(endingSoon: boolean): void {
+    updateFilters({ ...filters, sort: endingSoon ? "ending-soon" : "default" });
   }
 </script>
 
@@ -40,10 +64,7 @@
 </svelte:head>
 
 <main class="mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-7xl flex-col gap-10 px-5 py-10 sm:px-8 lg:py-14">
-  <section
-    aria-labelledby="page-title"
-    class="flex w-full flex-col items-start gap-5 border-b pb-8 sm:flex-row sm:items-end sm:justify-between"
-  >
+  <section aria-labelledby="page-title" class="flex w-full flex-col items-start gap-5 border-b pb-8">
     <div class="flex max-w-2xl flex-col items-start gap-3">
       <BrandLogo kind="lockup" alt="Claim" class="mb-3 h-auto w-64 sm:w-80" />
       <p class="text-primary text-sm font-medium tracking-widest uppercase">Free to keep</p>
@@ -52,31 +73,15 @@
         Current giveaways from Epic Games, Prime Gaming, GOG, and Steam, gathered in one place.
       </p>
     </div>
-    <Badge variant="secondary">
-      {visibleGiveaways.length}
-      {visibleGiveaways.length === 1 ? "giveaway" : "giveaways"}
-    </Badge>
   </section>
 
-  <section aria-labelledby="store-filter-title" class="flex flex-col items-start gap-3">
-    <h2 id="store-filter-title" class="text-sm font-medium">Filter by store</h2>
-    <ToggleGroup.Root
-      type="single"
-      variant="outline"
-      spacing={2}
-      class="flex-wrap"
-      aria-labelledby="store-filter-title"
-      bind:value={() => selectedStore, updateSelectedStore}
-    >
-      <ToggleGroup.Item value="all">All stores</ToggleGroup.Item>
-      {#each STORE_IDS as store}
-        <ToggleGroup.Item value={store}>
-          <StoreLogo {store} />
-          {formatStore(store)}
-        </ToggleGroup.Item>
-      {/each}
-    </ToggleGroup.Root>
-  </section>
+  <GiveawayFilters
+    counts={storeCounts}
+    selectedStore={filters.store}
+    endingSoon={filters.sort === "ending-soon"}
+    onStoreChange={updateSelectedStore}
+    onEndingSoonChange={updateEndingSoon}
+  />
 
   {#if data.items.errors.length > 0}
     <Alert.Root>
@@ -97,7 +102,7 @@
       <h2 id="giveaway-list-title" class="sr-only">Available giveaways</h2>
       <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
         {#each visibleGiveaways as giveaway (`${giveaway.store}:${giveaway.id}`)}
-          <GiveawayCard {giveaway} />
+          <GiveawayCard {giveaway} {now} />
         {/each}
       </div>
     </section>
@@ -107,13 +112,13 @@
         <Empty.Media variant="icon">
           <HugeiconsIcon icon={GiftIcon} />
         </Empty.Media>
-        {#if selectedStore === "all"}
+        {#if filters.store === "all"}
           <Empty.Title>No giveaways available</Empty.Title>
           <Empty.Description>There are no active free-to-keep games right now. Check back soon.</Empty.Description>
         {:else}
-          <Empty.Title>No {formatStore(selectedStore)} giveaways available</Empty.Title>
+          <Empty.Title>No {formatStore(filters.store)} giveaways available</Empty.Title>
           <Empty.Description>
-            There are no active free-to-keep games from {formatStore(selectedStore)} right now. Try another store or check
+            There are no active free-to-keep games from {formatStore(filters.store)} right now. Try another store or check
             back soon.
           </Empty.Description>
         {/if}

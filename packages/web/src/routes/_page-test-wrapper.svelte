@@ -4,8 +4,10 @@
   import Page from "./+page.svelte";
 
   let props: PageProps = $props();
+
+  function updateFilterUrl(): void {}
 </script>
 
 <Tooltip.Provider>
-  <Page {...props} />
+  <Page {...props} {updateFilterUrl} />
 </Tooltip.Provider>
