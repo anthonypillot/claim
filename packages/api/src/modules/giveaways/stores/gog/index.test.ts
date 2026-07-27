@@ -56,6 +56,23 @@ describe("fetchFreeGames", () => {
     ]);
   });
 
+  it("falls back from an unsafe store URL and nulls unsafe images", async () => {
+    const section = structuredClone(gogGiveawaySectionFixtures["section-giveaway-active"]!);
+    const product = section.properties!.product!;
+    product.storeLink = "javascript:alert(1)";
+    product.coverHorizontal = "data:image/png,unsafe";
+    product.coverVertical = "https://user:password@example.com/cover.jpg";
+    stubFetch({
+      section: (id) =>
+        jsonResponse(id === "section-giveaway-active" ? section : gogGiveawaySectionFixtures[id]),
+    });
+
+    const [game] = await fetchFreeGames({ locale: "en-US", country: "US" });
+
+    expect(game?.url).toBe("https://www.gog.com/en/game/actually_free_gog_game");
+    expect(game?.images).toEqual({ wide: null, tall: null, thumbnail: null });
+  });
+
   it("fetches the section list and every giveaway section with the locale", async () => {
     await fetchFreeGames({ locale: "fr-FR", country: "FR" });
 

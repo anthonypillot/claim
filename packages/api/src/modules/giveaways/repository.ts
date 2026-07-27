@@ -6,6 +6,7 @@ import { giveawayFetches, giveaways } from "../../db/schema.ts";
 import { createLogger } from "../../utils/logger.ts";
 import type { Giveaway, StoreGiveaway, StoreId } from "./model.ts";
 import { CACHE_TTL_HOURS, STORE_IDS } from "./model.ts";
+import { normalizeExternalUrl } from "./stores/shared.ts";
 
 const log = createLogger("giveaways repository");
 
@@ -26,10 +27,10 @@ function toRow(
     country,
     title: giveaway.title,
     description: giveaway.description,
-    url: giveaway.url,
-    imageWide: giveaway.images.wide,
-    imageTall: giveaway.images.tall,
-    imageThumbnail: giveaway.images.thumbnail,
+    url: normalizeExternalUrl(giveaway.url),
+    imageWide: normalizeExternalUrl(giveaway.images.wide),
+    imageTall: normalizeExternalUrl(giveaway.images.tall),
+    imageThumbnail: normalizeExternalUrl(giveaway.images.thumbnail),
     seller: giveaway.seller,
     priceOriginal: giveaway.price?.original ?? null,
     priceFormatted: giveaway.price?.formatted ?? null,
@@ -47,8 +48,12 @@ export function toGiveaway(row: GiveawayRow): Giveaway {
     id: row.id,
     title: row.title,
     description: row.description,
-    url: row.url,
-    images: { wide: row.imageWide, tall: row.imageTall, thumbnail: row.imageThumbnail },
+    url: normalizeExternalUrl(row.url),
+    images: {
+      wide: normalizeExternalUrl(row.imageWide),
+      tall: normalizeExternalUrl(row.imageTall),
+      thumbnail: normalizeExternalUrl(row.imageThumbnail),
+    },
     seller: row.seller,
     // The all-or-nothing CHECK guarantees these agree; the inline checks let TS narrow away the nulls.
     price:

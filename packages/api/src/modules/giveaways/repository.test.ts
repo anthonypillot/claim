@@ -77,6 +77,44 @@ describe("refreshStore", () => {
     expect(toStoreGiveaway(row)).toEqual({ ...input, store: "steam" });
   });
 
+  it("nulls unsafe URLs before persistence", async () => {
+    await refreshStore(db, MARKET, "steam", [
+      giveaway({
+        url: "javascript:alert(1)",
+        images: {
+          wide: "data:image/png,unsafe",
+          tall: "file:///tmp/tall.jpg",
+          thumbnail: "https://user:password@example.com/thumb.jpg",
+        },
+      }),
+    ]);
+
+    const [row] = await findActiveGiveaways(db, MARKET);
+    expect(row).toMatchObject({
+      url: null,
+      imageWide: null,
+      imageTall: null,
+      imageThumbnail: null,
+    });
+  });
+
+  it("nulls unsafe URLs read from legacy rows", async () => {
+    await refreshStore(db, MARKET, "steam", [giveaway()]);
+    await db.update(giveaways).set({
+      url: "javascript:alert(1)",
+      imageWide: "data:image/png,unsafe",
+      imageTall: "file:///tmp/tall.jpg",
+      imageThumbnail: "ftp://example.com/thumb.jpg",
+    });
+
+    const [row] = await findActiveGiveaways(db, MARKET);
+    if (!row) throw new Error("expected a seeded row");
+    expect(toStoreGiveaway(row)).toMatchObject({
+      url: null,
+      images: { wide: null, tall: null, thumbnail: null },
+    });
+  });
+
   it("deactivates omitted rows without deleting their history", async () => {
     await refreshStore(db, MARKET, "steam", [giveaway({ id: "kept" }), giveaway({ id: "gone" })]);
     await refreshStore(db, MARKET, "steam", [giveaway({ id: "kept" })]);

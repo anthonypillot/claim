@@ -59,11 +59,18 @@ export function resolveMarket(query: typeof GiveawaysQuerySchema.static): Market
   };
 }
 
+const HTTP_URL_OPTIONS = {
+  format: "uri",
+  pattern: "^https?://",
+} as const;
+
 export const GiveawayImagesSchema = t.Object(
   {
-    wide: t.Nullable(t.String({ description: "Landscape/hero artwork URL" })),
-    tall: t.Nullable(t.String({ description: "Portrait/box artwork URL" })),
-    thumbnail: t.Nullable(t.String({ description: "Small preview artwork URL" })),
+    wide: t.Nullable(t.String({ ...HTTP_URL_OPTIONS, description: "Landscape/hero artwork URL" })),
+    tall: t.Nullable(t.String({ ...HTTP_URL_OPTIONS, description: "Portrait/box artwork URL" })),
+    thumbnail: t.Nullable(
+      t.String({ ...HTTP_URL_OPTIONS, description: "Small preview artwork URL" }),
+    ),
   },
   {
     description:
@@ -75,7 +82,7 @@ export const GiveawaySchema = t.Object({
   id: t.String({ description: "Store offer identifier" }),
   title: t.String(),
   description: t.String(),
-  url: t.Nullable(t.String({ description: "Store page URL" })),
+  url: t.Nullable(t.String({ ...HTTP_URL_OPTIONS, description: "Store page URL" })),
   images: GiveawayImagesSchema,
   seller: t.String(),
   price: t.Nullable(

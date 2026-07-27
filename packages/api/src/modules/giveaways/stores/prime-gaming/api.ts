@@ -1,5 +1,5 @@
 import { createLogger } from "../../../../utils/logger.ts";
-import { isRecord, UpstreamError } from "../shared.ts";
+import { isRecord, readUpstreamJson, readUpstreamText, UpstreamError } from "../shared.ts";
 import type { PrimeItem } from "./types.ts";
 
 const log = createLogger("prime gaming store");
@@ -130,7 +130,7 @@ async function fetchSession(): Promise<{ cookie: string; csrfToken: string }> {
     .getSetCookie()
     .map((setCookie) => setCookie.split(";")[0] ?? setCookie)
     .join("; ");
-  const csrfToken = extractCsrfToken(await response.text());
+  const csrfToken = extractCsrfToken(await readUpstreamText(response, STORE));
   if (!csrfToken) {
     throw new UpstreamError(STORE, "missing csrf token in session response");
   }
@@ -170,7 +170,7 @@ export async function fetchFreeGamesItems(options: {
     if (!response.ok) {
       throw new UpstreamError(STORE, `upstream returned ${response.status}`);
     }
-    body = await response.json();
+    body = await readUpstreamJson(response, STORE);
   } catch (cause) {
     if (cause instanceof UpstreamError) throw cause;
     throw new UpstreamError(STORE, "upstream request failed", { cause });
