@@ -91,6 +91,9 @@ The schema lives in `src/db/schema.ts`; generated SQL migrations live in `drizzl
 Run migration commands from the repository root with the API package as the working directory:
 
 ```bash
+# Preview the schema changes needed by the target database without applying them.
+bun run --cwd packages/api db:diff
+
 # After changing the schema, review and commit the generated migration.
 bun run --cwd packages/api db:generate
 
