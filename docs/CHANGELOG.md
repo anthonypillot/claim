@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/anthonypillot/claim/compare/v1.1.0...v1.1.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **api:** validate and bound untrusted upstream data ([e3a8472](https://github.com/anthonypillot/claim/commit/e3a8472990127c4e51171dc05104a2dec6fda8c7))
+
 # [1.1.0](https://github.com/anthonypillot/claim/compare/v1.0.2...v1.1.0) (2026-07-27)
 
 
