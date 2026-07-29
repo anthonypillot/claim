@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/anthonypillot/claim/compare/v1.1.1...v1.1.2) (2026-07-29)
+
+
+### Bug Fixes
+
+* **api:** serve stale giveaways when refresh fails ([8d0bfbe](https://github.com/anthonypillot/claim/commit/8d0bfbe2465256b671be3a5e33b622f08317d4e6))
+
 ## [1.1.1](https://github.com/anthonypillot/claim/compare/v1.1.0...v1.1.1) (2026-07-28)
 
 
