@@ -71,10 +71,9 @@ images that passed their smoke tests. Each image is published only after the tag
 own image check pass.
 
 Adding the `deploy` label to an internal pull request deploys its API and Web images to the
-pre-production Kubernetes environments. New commits to a labeled pull request publish immutable
-commit-specific image tags and redeploy both previews. Published releases automatically deploy the
-stable version to both pre-production and production after both images pass their checks and are
-published.
+pre-production Kubernetes environments using the extracted branch tag. New commits to a labeled
+pull request rebuild and redeploy both previews. Published releases automatically deploy the stable
+version to both pre-production and production after both images pass their checks and are published.
 
 ## Further reading
 

@@ -76,9 +76,7 @@ jobs:
       dockerfile: ${{ matrix.dockerfile }}
       image: ${{ matrix.image }}
       publish: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-      tags: |
-        ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.extract.outputs.result }}
-        ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+      tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.extract.outputs.result }}
       version: ${{ needs.extract.outputs.result }}
     secrets:
       registry-token: ${{ secrets.GITHUB_TOKEN }}
@@ -88,7 +86,7 @@ jobs:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.labels.*.name, 'deploy')
-    needs: images
+    needs: [extract, images]
     strategy:
       fail-fast: false
       matrix:
@@ -109,7 +107,7 @@ jobs:
       container_name: ${{ matrix.container }}
       environment: pre-production
       image_name: ${{ matrix.image }}
-      image_tag: pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+      image_tag: ${{ needs.extract.outputs.result }}
       namespace_name: ${{ matrix.namespace }}
     secrets:
       kubeconfig: ${{ secrets.KUBECONFIG }}
