@@ -70,6 +70,12 @@ publish preview tags, while fork pull requests only run the image checks. Releas
 images that passed their smoke tests. Each image is published only after the tagged source and its
 own image check pass.
 
+Adding the `deploy` label to an internal pull request deploys its API and Web images to the
+pre-production Kubernetes environments. New commits to a labeled pull request publish immutable
+commit-specific image tags and redeploy both previews. Published releases automatically deploy the
+stable version to both pre-production and production after both images pass their checks and are
+published.
+
 ## Further reading
 
 - [Roadmap](docs/roadmap.md)
