@@ -57,7 +57,7 @@ jobs:
         run: bun run verify
 
   images:
-    name: 🐳 Build and publish ${{ matrix.image }} release
+    name: 🐳 Build and publish ${{ matrix.image }}:${{ needs.build.outputs.version }} release
     needs: build
     permissions:
       contents: read

@@ -58,7 +58,7 @@ jobs:
         run: bun run build
 
   images:
-    name: 🐳 Build and publish ${{ matrix.image }} preview
+    name: 🐳 Build and publish ${{ matrix.image }}:${{ needs.extract.outputs.result }} preview
     needs: [extract, build]
     permissions:
       contents: read
