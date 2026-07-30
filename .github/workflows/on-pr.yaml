@@ -3,6 +3,7 @@ name: 🏗️ On Pull Request
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read
@@ -57,7 +58,7 @@ jobs:
         run: bun run build
 
   images:
-    name: 🐳 Build and publish ${{ matrix.image }} preview
+    name: 🐳 Build and publish ${{ matrix.image }}:${{ needs.extract.outputs.result }} preview
     needs: [extract, build]
     permissions:
       contents: read
@@ -79,3 +80,34 @@ jobs:
       version: ${{ needs.extract.outputs.result }}
     secrets:
       registry-token: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    name: 🚀 Deploy ${{ matrix.image }} preview
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.labels.*.name, 'deploy')
+    needs: [extract, images]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: claim-api
+            namespace: claim-api-prep
+            deployment: claim-api-prep
+            container: claim-api
+          - image: claim-web
+            namespace: claim-web-prep
+            deployment: claim-web-prep
+            container: claim-web
+    uses: anthonypillot/actions/.github/workflows/kubernetes-deployment.yaml@v1
+    with:
+      registry_url: ghcr.io
+      registry_username: ${{ github.repository_owner }}
+      deployment_name: ${{ matrix.deployment }}
+      container_name: ${{ matrix.container }}
+      environment: pre-production
+      image_name: ${{ matrix.image }}
+      image_tag: ${{ needs.extract.outputs.result }}
+      namespace_name: ${{ matrix.namespace }}
+    secrets:
+      kubeconfig: ${{ secrets.KUBECONFIG }}
