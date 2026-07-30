@@ -1,3 +1,10 @@
+## [1.1.3](https://github.com/anthonypillot/claim/compare/v1.1.2...v1.1.3) (2026-07-30)
+
+
+### Performance Improvements
+
+* **web:** add animated giveaway landing page ([#42](https://github.com/anthonypillot/claim/issues/42)) ([0f66051](https://github.com/anthonypillot/claim/commit/0f6605186acf6ccf86a252bb5700d86b3f47a0f3))
+
 ## [1.1.2](https://github.com/anthonypillot/claim/compare/v1.1.1...v1.1.2) (2026-07-29)
 
 
