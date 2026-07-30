@@ -86,41 +86,10 @@ jobs:
       registry-token: ${{ secrets.GITHUB_TOKEN }}
 
   deploy:
-    name: 🚀 Deploy ${{ matrix.image }} to ${{ matrix.environment }}
     needs: [build, images]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image: claim-api
-            environment: pre-production
-            namespace: claim-api-prep
-            deployment: claim-api-prep
-            container: claim-api
-          - image: claim-web
-            environment: pre-production
-            namespace: claim-web-prep
-            deployment: claim-web-prep
-            container: claim-web
-          - image: claim-api
-            environment: production
-            namespace: claim-api-prod
-            deployment: claim-api-prod
-            container: claim-api
-          - image: claim-web
-            environment: production
-            namespace: claim-web-prod
-            deployment: claim-web-prod
-            container: claim-web
-    uses: anthonypillot/actions/.github/workflows/kubernetes-deployment.yaml@v1
+    uses: ./.github/workflows/deploy.yaml
     with:
-      registry_url: ghcr.io
-      registry_username: ${{ github.repository_owner }}
-      deployment_name: ${{ matrix.deployment }}
-      container_name: ${{ matrix.container }}
-      environment: ${{ matrix.environment }}
-      image_name: ${{ matrix.image }}
-      image_tag: ${{ needs.build.outputs.version }}
-      namespace_name: ${{ matrix.namespace }}
+      tag: ${{ github.event.release.tag_name }}
+      environment: both
     secrets:
-      kubeconfig: ${{ secrets.KUBECONFIG }}
+      KUBECONFIG: ${{ secrets.KUBECONFIG }}

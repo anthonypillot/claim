@@ -75,6 +75,11 @@ pre-production Kubernetes environments using the extracted branch tag. New commi
 pull request rebuild and redeploy both previews. Published releases automatically deploy the stable
 version to both pre-production and production after both images pass their checks and are published.
 
+To redeploy or roll back manually, run the `🚀 Deploy` workflow from the Actions tab on `main`, enter
+a published stable tag such as `v1.0.2`, and select `pre-production`, `production`, or `both`. The
+workflow verifies that the release and both exact image tags exist before updating either Kubernetes
+deployment.
+
 ## Further reading
 
 - [Roadmap](docs/roadmap.md)
