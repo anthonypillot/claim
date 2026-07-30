@@ -112,6 +112,10 @@ export async function refreshStore(
   const rows = [...deduped.values()].map((item) =>
     toRow(store, item, market.locale, market.country, now),
   );
+  const refreshDeadline = new Date(now.getTime() + CACHE_TTL_HOURS * 60 * 60 * 1000);
+  for (const row of rows) {
+    if (row.freeUntil < refreshDeadline) refreshDeadline.setTime(row.freeUntil.getTime());
+  }
 
   const refreshed = await db.transaction(async (tx) => {
     if (leaseToken === undefined) {
@@ -165,6 +169,7 @@ export async function refreshStore(
       .update(giveawayFetches)
       .set({
         fetchedAt: sql`now()`,
+        freshUntil: refreshDeadline,
         failedAt: null,
         leaseToken: null,
         leaseExpiresAt: null,
@@ -195,10 +200,7 @@ export async function acquireRefreshLease(db: Database, scope: StoreScope): Prom
         leaseExpiresAt: sql`now() + ${REFRESH_LEASE_SECONDS} * interval '1 second'`,
       },
       setWhere: and(
-        or(
-          isNull(giveawayFetches.fetchedAt),
-          lte(giveawayFetches.fetchedAt, sql`now() - ${CACHE_TTL_HOURS} * interval '1 hour'`),
-        ),
+        or(isNull(giveawayFetches.fetchedAt), lte(giveawayFetches.freshUntil, sql`now()`)),
         or(
           isNull(giveawayFetches.failedAt),
           lte(
@@ -265,7 +267,7 @@ export async function findActiveGiveaways(db: Database, scope: Scope): Promise<G
     );
 }
 
-/** Known stores whose market scope was refreshed within the TTL. */
+/** Known stores whose market scope is fresh until its TTL or earliest giveaway expiry. */
 export async function findFreshStoreIds(
   db: Database,
   market: { locale: string; country: string },
@@ -278,15 +280,15 @@ export async function findFreshStoreIds(
         eq(giveawayFetches.locale, market.locale),
         eq(giveawayFetches.country, market.country),
         inArray(giveawayFetches.store, STORE_IDS),
-        gt(giveawayFetches.fetchedAt, sql`now() - ${CACHE_TTL_HOURS} * interval '1 hour'`),
+        gt(giveawayFetches.freshUntil, sql`now()`),
       ),
     );
   return rows.map((row) => row.store as StoreId);
 }
 
 /**
- * Whether a single store's cache for a market is fresh (fetched within the TTL). Stays `true` for a store
- * that was fetched but produced zero giveaways — the empty-store case a row count cannot express.
+ * Whether a single store's cache for a market is fresh. Empty snapshots remain fresh until the TTL,
+ * while non-empty snapshots are refreshed when their earliest giveaway expires.
  */
 export async function isFresh(
   db: Database,

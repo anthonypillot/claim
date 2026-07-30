@@ -152,7 +152,10 @@ describe("refreshStore", () => {
     await refreshStore(db, MARKET, "steam", [giveaway()]);
     await db
       .update(giveawayFetches)
-      .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` })
+      .set({
+        fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'`,
+        freshUntil: sql`now() - interval '1 hour'`,
+      })
       .where(eq(giveawayFetches.store, "steam"));
     const invalid = giveaway({
       price: { original: 1, formatted: null, currency: "USD" } as unknown as Giveaway["price"],
@@ -208,6 +211,7 @@ describe("freshness", () => {
       store: "gog",
       ...MARKET,
       fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'`,
+      freshUntil: sql`now() - interval '1 hour'`,
     });
 
     expect(await findFreshStoreIds(db, MARKET)).toEqual(["steam"]);
@@ -239,7 +243,10 @@ describe("refresh coordination", () => {
     await refreshStore(db, MARKET, "steam", [giveaway()]);
     await db
       .update(giveawayFetches)
-      .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` })
+      .set({
+        fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'`,
+        freshUntil: sql`now() - interval '1 hour'`,
+      })
       .where(eq(giveawayFetches.store, "steam"));
     const token = await acquireRefreshLease(db, { ...MARKET, store: "steam" });
     if (token === null) throw new Error("expected refresh lease");

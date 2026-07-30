@@ -26,8 +26,9 @@ Giveaways are cached in **Postgres** (Drizzle ORM). `GET /giveaways*` is a **rea
 serves from the database when the data is fresh, and otherwise fetches live, stores the result, and serves it —
 faster on repeat reads and resilient to upstream hiccups:
 
-- **Read-through with a 24h TTL** — a scope (store × locale × country) fetched within `CACHE_TTL_HOURS` is
-  served from the DB; past that, the next read re-fetches and re-caches. No cron, no separate refresh endpoint.
+- **Expiry-aware read-through** — each store × locale × country scope is cached until its earliest giveaway
+  expires or its 24-hour maximum TTL ends. The next read refreshes stale scopes; there is no cron or separate
+  refresh endpoint.
 - **History** — rows are never deleted during refresh. Offers omitted by the latest successful store refresh
   become inactive; current results require both an active row and an unexpired free window.
 - **Empty stores** — a store fetched with no current giveaway is remembered as fetched, so it's served empty
@@ -38,6 +39,8 @@ faster on repeat reads and resilient to upstream hiccups:
   reported by aggregate reads. A five-minute failure cooldown prevents retry storms.
 - **Refresh coordination** — concurrent requests share refresh work within one process, and a token-guarded
   60-second Postgres lease prevents duplicate upstream calls across replicas.
+
+See [`giveaways-flow.md`](./giveaways-flow.md) for a concise table of cache and upstream-call behavior.
 
 ### More stores
 

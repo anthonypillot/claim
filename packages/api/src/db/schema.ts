@@ -69,6 +69,7 @@ export const giveawayFetches = pgTable(
     locale: text("locale").notNull(),
     country: text("country").notNull(),
     fetchedAt: timestamp("fetched_at", seenAt),
+    freshUntil: timestamp("fresh_until", seenAt),
     failedAt: timestamp("failed_at", seenAt),
     leaseToken: text("lease_token"),
     leaseExpiresAt: timestamp("lease_expires_at", seenAt),

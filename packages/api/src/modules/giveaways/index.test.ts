@@ -101,14 +101,18 @@ async function refreshMarket(steamGiveaways: Giveaway[] = []): Promise<void> {
 async function ageStore(store: (typeof STORE_IDS)[number]): Promise<void> {
   await db
     .update(giveawayFetchesTable)
-    .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` })
+    .set({
+      fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'`,
+      freshUntil: sql`now() - interval '1 hour'`,
+    })
     .where(eq(giveawayFetchesTable.store, store));
 }
 
 async function ageMarket(): Promise<void> {
-  await db
-    .update(giveawayFetchesTable)
-    .set({ fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'` });
+  await db.update(giveawayFetchesTable).set({
+    fetchedAt: sql`now() - ${CACHE_TTL_HOURS + 1} * interval '1 hour'`,
+    freshUntil: sql`now() - interval '1 hour'`,
+  });
 }
 
 beforeAll(async () => {
@@ -319,21 +323,27 @@ describe("GET /giveaways (read-through cache)", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("serves empty (no re-fetch) when the market is fresh but nothing is active", async () => {
-    await refreshMarket([
+  it("refreshes when the cached giveaway window has expired", async () => {
+    await refreshStore(db, MARKET_US, "epic-games", [
       {
         ...cachedSteamGiveaway(),
         id: "expired",
         freeUntil: new Date(Date.now() - 1000).toISOString(),
       },
     ]);
-    fetchSpy.mockClear();
+    fetchSpy.mockImplementation(((input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("epicgames.com")) {
+        return Promise.resolve(new Response(JSON.stringify(epicFreeGamesFixture)));
+      }
+      return stubUpstreamFetch(input);
+    }) as typeof fetch);
 
-    const response = await app.handle(new Request(ALL_URL));
+    const response = await app.handle(new Request(EPIC_URL));
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ count: 0, giveaways: [], errors: [] });
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(await response.json()).toMatchObject({ count: 1 });
+    expect(fetchSpy).toHaveBeenCalled();
   });
 
   it("re-fetches when a store's cache has passed the TTL", async () => {

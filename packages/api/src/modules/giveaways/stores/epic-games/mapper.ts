@@ -25,7 +25,7 @@ function activeFreeWindow(offer: EpicOffer, now: Date): { endDate: string } | un
   if (offer.price?.totalPrice?.discountPrice !== 0) return undefined;
   return offer.promotions?.promotionalOffers
     ?.flatMap((group) => group.promotionalOffers ?? [])
-    .find((window) => new Date(window.startDate) <= now && now <= new Date(window.endDate));
+    .find((window) => new Date(window.startDate) <= now && now < new Date(window.endDate));
 }
 
 function toGiveaway(offer: EpicOffer, freeUntil: string, locale: string): Giveaway {
