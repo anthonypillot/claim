@@ -5,6 +5,7 @@
   import GiveawayCard from "$lib/components/giveaway-card.svelte";
   import GiveawayFilters from "$lib/components/giveaway-filters.svelte";
   import GridMotion from "$lib/components/grid-motion.svelte";
+  import ScrollReveal from "$lib/components/scroll-reveal.svelte";
   import * as Alert from "$lib/components/ui/alert";
   import * as Empty from "$lib/components/ui/empty";
   import {
@@ -118,7 +119,9 @@
       <h2 id="giveaway-list-title" class="sr-only">Available giveaways</h2>
       <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
         {#each visibleGiveaways as giveaway (`${giveaway.store}:${giveaway.id}`)}
-          <GiveawayCard {giveaway} {now} />
+          <ScrollReveal>
+            <GiveawayCard {giveaway} {now} />
+          </ScrollReveal>
         {/each}
       </div>
     </section>
