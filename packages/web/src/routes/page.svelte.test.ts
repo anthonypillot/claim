@@ -1,5 +1,7 @@
 import type { Giveaway, GiveawaysResponse, StoreId } from "$lib/giveaways/model";
-import { expect, test } from "vitest";
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { expect, test, vi } from "vitest";
 import { render } from "vitest-browser-svelte";
 import type { PageProps } from "./$types";
 import PageTestWrapper from "./_page-test-wrapper.svelte";
@@ -81,6 +83,32 @@ test("shows giveaways from all stores by default", async () => {
   await expect.element(screen.getByText("Steam Giveaway", { exact: true })).toBeInTheDocument();
 });
 
+test("fills the motion hero with current giveaway artwork", async () => {
+  const items = {
+    count: 1,
+    giveaways: [
+      {
+        ...createGiveaway("epic", "Epic Giveaway", "epic-games"),
+        images: {
+          wide: "https://example.com/epic-giveaway.jpg",
+          tall: null,
+          thumbnail: null,
+        },
+      },
+    ],
+    errors: [],
+  } satisfies GiveawaysResponse;
+
+  const screen = await renderPage(items);
+  const hero = screen.getByTestId("giveaway-hero").element();
+  const motionItems = hero.querySelectorAll<HTMLElement>("[data-grid-motion-item]");
+
+  expect(motionItems).toHaveLength(28);
+  expect(motionItems[0]?.firstElementChild).toHaveStyle({
+    backgroundImage: 'url("https://example.com/epic-giveaway.jpg")',
+  });
+});
+
 test("filters giveaways by store and keeps partial-store errors visible", async () => {
   const items = {
     count: 2,
@@ -120,6 +148,8 @@ test("shows a store-specific empty state", async () => {
 });
 
 test("sorts visible giveaways by expiry and restores API order", async () => {
+  gsap.registerPlugin(ScrollTrigger);
+  const refresh = vi.spyOn(ScrollTrigger, "refresh");
   const items = {
     count: 3,
     giveaways: [
@@ -132,16 +162,22 @@ test("sorts visible giveaways by expiry and restores API order", async () => {
 
   const screen = await renderPage(items);
   const endingSoon = screen.getByRole("button", { name: "Sort by ending soon" });
+  await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
+  refresh.mockClear();
 
   await endingSoon.click();
   await expect.element(endingSoon).toHaveAttribute("aria-pressed", "true");
+  await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
   expect(
     Array.from(document.querySelectorAll<HTMLElement>("[data-slot=card-title]"), (title) => title.innerText),
   ).toEqual(["Other Giveaway", "Sooner Giveaway", "Later Giveaway"]);
+  refresh.mockClear();
 
   await endingSoon.click();
   await expect.element(endingSoon).toHaveAttribute("aria-pressed", "false");
+  await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
   expect(
     Array.from(document.querySelectorAll<HTMLElement>("[data-slot=card-title]"), (title) => title.innerText),
   ).toEqual(["Later Giveaway", "Other Giveaway", "Sooner Giveaway"]);
+  refresh.mockRestore();
 });
