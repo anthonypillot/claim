@@ -19,6 +19,7 @@
   import { formatStore, getGiveawayImage } from "$lib/giveaways/model";
   import { AlertCircleIcon, GiftIcon } from "@hugeicons/core-free-icons";
   import { HugeiconsIcon } from "@hugeicons/svelte";
+  import { gsap } from "gsap";
   import { onMount } from "svelte";
   import type { PageProps } from "./$types";
 
@@ -26,6 +27,10 @@
 
   let filters = $state(parseGiveawayFilters(page.url.searchParams));
   let updatedAt = $state<number>();
+  let heroGrid: HTMLDivElement;
+  let heroTint: HTMLDivElement;
+  let heroGradient: HTMLDivElement;
+  let heroContent: HTMLDivElement;
   const now = $derived(updatedAt ?? data.loadedAt);
   const storeCounts = $derived(getStoreCounts(data.items.giveaways));
   const visibleGiveaways = $derived(filterAndSortGiveaways(data.items.giveaways, filters));
@@ -41,7 +46,43 @@
       updatedAt = Date.now();
     }, 60_000);
 
-    return () => window.clearInterval(timer);
+    const media = gsap.matchMedia();
+    media.add("(prefers-reduced-motion: no-preference)", () => {
+      gsap
+        .timeline({ defaults: { ease: "power3.out" } })
+        .from(heroGrid, {
+          opacity: 0,
+          scale: 60,
+          duration: 4,
+          clearProps: "opacity,transform",
+        })
+        .from(
+          [heroTint, heroGradient],
+          {
+            opacity: 0,
+            duration: 2,
+            stagger: 0.5,
+            clearProps: "opacity",
+          },
+          0.08,
+        )
+        .from(
+          Array.from(heroContent.children),
+          {
+            opacity: 0,
+            y: 20,
+            duration: 2,
+            stagger: 0.5,
+            clearProps: "opacity,transform",
+          },
+          0.18,
+        );
+    });
+
+    return () => {
+      window.clearInterval(timer);
+      media.revert();
+    };
   });
 
   $effect(() => {
@@ -77,12 +118,18 @@
     class="relative isolate min-h-96 overflow-hidden border"
     data-testid="giveaway-hero"
   >
-    <div class="absolute inset-0 -z-20">
+    <div bind:this={heroGrid} class="absolute inset-0 -z-20">
       <GridMotion items={giveawayArtwork} />
     </div>
-    <div class="bg-background/50 absolute inset-0 -z-10"></div>
-    <div class="from-background via-background/70 absolute inset-0 -z-10 bg-linear-to-r to-transparent sm:w-4/5"></div>
-    <div class="flex min-h-96 max-w-2xl flex-col items-start justify-center gap-3 px-6 py-12 sm:px-10">
+    <div bind:this={heroTint} class="bg-background/50 absolute inset-0 -z-10"></div>
+    <div
+      bind:this={heroGradient}
+      class="from-background via-background/70 absolute inset-0 -z-10 bg-linear-to-r to-transparent sm:w-4/5"
+    ></div>
+    <div
+      bind:this={heroContent}
+      class="flex min-h-96 max-w-2xl flex-col items-start justify-center gap-3 px-6 py-12 sm:px-10"
+    >
       <BrandLogo kind="lockup" alt="Claim" class="mb-3 h-auto w-64 sm:w-80" />
       <p class="text-primary text-sm font-medium tracking-widest uppercase">Free to claim, free to keep</p>
       <h1 id="page-title" class="font-heading text-4xl font-bold tracking-tight sm:text-5xl">Games worth claiming</h1>
