@@ -59,26 +59,15 @@ focused tests are documented in each package README.
 
 ## Releases
 
-Semantic Release runs from `main`. It keeps the root, API, web, and lockfile versions synchronized,
-generates `docs/CHANGELOG.md`, verifies the prepared tree, and commits the release assets before
-creating the `vX.Y.Z` tag and GitHub release. The generated commit includes `[skip ci]` to avoid a
-duplicate push workflow.
+Semantic Release runs from `main`, synchronizes package versions, updates `docs/CHANGELOG.md`, and
+creates the `vX.Y.Z` tag and GitHub release after verification. Release commits include `[skip ci]`.
 
-The pull-request and release workflows build each multi-platform image once, load it into the
-runner's containerd image store, and smoke-test its `linux/amd64` variant. Internal pull requests
-publish preview tags, while fork pull requests only run the image checks. Releases push the exact
-images that passed their smoke tests. Each image is published only after the tagged source and its
-own image check pass.
+Pull requests publish preview images for internal branches; forks only run image checks. Adding
+`deploy` to an internal pull request takes effect on its next commit. Published releases deploy the
+verified stable images to pre-production and production. Labels do not trigger pull-request jobs.
 
-Adding the `deploy` label to an internal pull request deploys its API and Web images to the
-pre-production Kubernetes environments using the extracted branch tag. New commits to a labeled
-pull request rebuild and redeploy both previews. Published releases automatically deploy the stable
-version to both pre-production and production after both images pass their checks and are published.
-
-To redeploy or roll back manually, run the `🚀 Deploy` workflow from the Actions tab on `main`, enter
-a published stable tag such as `v1.0.2`, and select `pre-production`, `production`, or `both`. The
-workflow verifies that the release and both exact image tags exist before updating either Kubernetes
-deployment.
+Run `🚀 Deploy` manually to redeploy or roll back a published stable tag in pre-production, production,
+or both.
 
 ## Further reading
 
