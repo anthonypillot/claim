@@ -27,6 +27,7 @@
 
   let filters = $state(parseGiveawayFilters(page.url.searchParams));
   let updatedAt = $state<number>();
+  let heroReady = $state(false);
   let heroGrid: HTMLDivElement;
   let heroTint: HTMLDivElement;
   let heroGradient: HTMLDivElement;
@@ -47,7 +48,11 @@
     }, 60_000);
 
     const media = gsap.matchMedia();
+    media.add("(prefers-reduced-motion: reduce)", () => {
+      heroReady = true;
+    });
     media.add("(prefers-reduced-motion: no-preference)", () => {
+      heroReady = false;
       gsap
         .timeline({ defaults: { ease: "power3.out" } })
         .from(heroGrid, {
@@ -76,6 +81,13 @@
             clearProps: "opacity,transform",
           },
           0.18,
+        )
+        .call(
+          () => {
+            heroReady = true;
+          },
+          [],
+          1,
         );
     });
 
@@ -166,7 +178,7 @@
       <h2 id="giveaway-list-title" class="sr-only">Available giveaways</h2>
       <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
         {#each visibleGiveaways as giveaway (`${giveaway.store}:${giveaway.id}`)}
-          <ScrollReveal>
+          <ScrollReveal enabled={heroReady}>
             <GiveawayCard {giveaway} {now} />
           </ScrollReveal>
         {/each}
