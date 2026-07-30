@@ -81,6 +81,32 @@ test("shows giveaways from all stores by default", async () => {
   await expect.element(screen.getByText("Steam Giveaway", { exact: true })).toBeInTheDocument();
 });
 
+test("fills the motion hero with current giveaway artwork", async () => {
+  const items = {
+    count: 1,
+    giveaways: [
+      {
+        ...createGiveaway("epic", "Epic Giveaway", "epic-games"),
+        images: {
+          wide: "https://example.com/epic-giveaway.jpg",
+          tall: null,
+          thumbnail: null,
+        },
+      },
+    ],
+    errors: [],
+  } satisfies GiveawaysResponse;
+
+  const screen = await renderPage(items);
+  const hero = screen.getByTestId("giveaway-hero").element();
+  const motionItems = hero.querySelectorAll<HTMLElement>("[data-grid-motion-item]");
+
+  expect(motionItems).toHaveLength(28);
+  expect(motionItems[0]?.firstElementChild).toHaveStyle({
+    backgroundImage: 'url("https://example.com/epic-giveaway.jpg")',
+  });
+});
+
 test("filters giveaways by store and keeps partial-store errors visible", async () => {
   const items = {
     count: 2,

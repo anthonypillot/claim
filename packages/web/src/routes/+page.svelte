@@ -4,6 +4,7 @@
   import BrandLogo from "$lib/components/brand-logo.svelte";
   import GiveawayCard from "$lib/components/giveaway-card.svelte";
   import GiveawayFilters from "$lib/components/giveaway-filters.svelte";
+  import GridMotion from "$lib/components/grid-motion.svelte";
   import * as Alert from "$lib/components/ui/alert";
   import * as Empty from "$lib/components/ui/empty";
   import {
@@ -14,7 +15,7 @@
     type GiveawayFilters as GiveawayFilterState,
     type StoreFilter,
   } from "$lib/giveaways/filters";
-  import { formatStore } from "$lib/giveaways/model";
+  import { formatStore, getGiveawayImage } from "$lib/giveaways/model";
   import { AlertCircleIcon, GiftIcon } from "@hugeicons/core-free-icons";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import { onMount } from "svelte";
@@ -27,6 +28,12 @@
   const now = $derived(updatedAt ?? data.loadedAt);
   const storeCounts = $derived(getStoreCounts(data.items.giveaways));
   const visibleGiveaways = $derived(filterAndSortGiveaways(data.items.giveaways, filters));
+  const giveawayArtwork = $derived(
+    data.items.giveaways.flatMap((giveaway) => {
+      const image = getGiveawayImage(giveaway.images);
+      return image ? [image] : [];
+    }),
+  );
 
   onMount(() => {
     const timer = window.setInterval(() => {
@@ -64,10 +71,19 @@
 </svelte:head>
 
 <main class="mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-7xl flex-col gap-10 px-5 py-10 sm:px-8 lg:py-14">
-  <section aria-labelledby="page-title" class="flex w-full flex-col items-start gap-5 border-b pb-8">
-    <div class="flex max-w-2xl flex-col items-start gap-3">
+  <section
+    aria-labelledby="page-title"
+    class="relative isolate min-h-96 overflow-hidden border"
+    data-testid="giveaway-hero"
+  >
+    <div class="absolute inset-0 -z-20">
+      <GridMotion items={giveawayArtwork} />
+    </div>
+    <div class="bg-background/50 absolute inset-0 -z-10"></div>
+    <div class="from-background via-background/70 absolute inset-0 -z-10 bg-linear-to-r to-transparent sm:w-4/5"></div>
+    <div class="flex min-h-96 max-w-2xl flex-col items-start justify-center gap-3 px-6 py-12 sm:px-10">
       <BrandLogo kind="lockup" alt="Claim" class="mb-3 h-auto w-64 sm:w-80" />
-      <p class="text-primary text-sm font-medium tracking-widest uppercase">Free to keep</p>
+      <p class="text-primary text-sm font-medium tracking-widest uppercase">Free to claim, free to keep</p>
       <h1 id="page-title" class="font-heading text-4xl font-bold tracking-tight sm:text-5xl">Games worth claiming</h1>
       <p class="text-muted-foreground text-lg">
         Current giveaways from Epic Games, Prime Gaming, GOG, and Steam, gathered in one place.
