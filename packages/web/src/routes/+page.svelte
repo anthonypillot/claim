@@ -20,7 +20,8 @@
   import { AlertCircleIcon, GiftIcon } from "@hugeicons/core-free-icons";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import { gsap } from "gsap";
-  import { onMount } from "svelte";
+  import { ScrollTrigger } from "gsap/ScrollTrigger";
+  import { onMount, tick } from "svelte";
   import type { PageProps } from "./$types";
 
   let { data, updateFilterUrl = pushFilterUrl }: PageProps & { updateFilterUrl?: (url: URL) => void } = $props();
@@ -47,6 +48,7 @@
       updatedAt = Date.now();
     }, 60_000);
 
+    gsap.registerPlugin(ScrollTrigger);
     const media = gsap.matchMedia();
     media.add("(prefers-reduced-motion: reduce)", () => {
       heroReady = true;
@@ -99,6 +101,20 @@
 
   $effect(() => {
     filters = parseGiveawayFilters(page.url.searchParams);
+  });
+
+  $effect(() => {
+    const giveawayOrder = visibleGiveaways.map((giveaway) => `${giveaway.store}:${giveaway.id}`).join(",");
+    if (!giveawayOrder) return;
+
+    let cancelled = false;
+    void tick().then(() => {
+      if (!cancelled) ScrollTrigger.refresh();
+    });
+
+    return () => {
+      cancelled = true;
+    };
   });
 
   function pushFilterUrl(url: URL): void {
