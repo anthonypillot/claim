@@ -66,16 +66,42 @@ components live directly under `src/lib/components`.
 
 Production requires these runtime environment variables:
 
-| Variable         | Purpose                                            |
-| ---------------- | -------------------------------------------------- |
-| `PUBLIC_API_URL` | API origin used for requests and the OpenAPI link. |
-| `PUBLIC_WEB_URL` | Web origin used to generate canonical page URLs.   |
-| `ORIGIN`         | Public web origin used by the Node server.         |
-| `PORT`           | Listening port. Defaults to `3000`.                |
+| Variable                | Purpose                                                      |
+| ----------------------- | ------------------------------------------------------------ |
+| `PUBLIC_API_URL`        | API origin used for requests and the OpenAPI link.           |
+| `PUBLIC_PLAUSIBLE_URL`  | Self-hosted Plausible origin used for production analytics.  |
+| `PUBLIC_WEB_URL`        | Web origin used for canonical URLs and the analytics domain. |
+| `ORIGIN`                | Public web origin used by the Node server.                   |
+| `ROBOTS_ALLOW_INDEXING` | Set to `true` only where search indexing is intended.        |
+| `PORT`                  | Listening port. Defaults to `3000`.                          |
 
-Set them to `https://api.claim.anthonypillot.com` and `https://claim.anthonypillot.com`,
-respectively. Values must be HTTP(S) origins without a path, query, or fragment. See `.env.example`
-for a deployable template; local development continues to use the Vite origins and `/api` proxy.
+Set the public origins to `https://api.claim.anthonypillot.com`,
+`https://plausible.monitoring.anthonypillot.com`, and `https://claim.anthonypillot.com`, respectively.
+Values must be HTTP(S) origins without a path, query, or fragment. See `.env.example` for a deployable
+production template; local development continues to use the Vite origins and `/api` proxy.
+
+### Analytics
+
+Non-development builds load the official Plausible tracker once from
+`PUBLIC_PLAUSIBLE_URL/js/script.js`. Its `data-domain` is the hostname from `PUBLIC_WEB_URL`, so each
+deployed hostname must exist as a site in Plausible. The tracker is omitted during local development
+and automated tests. It is cookie-free and automatically tracks initial page views and SvelteKit
+`pushState` and back/forward navigation. Query-only giveaway filter changes are UI state and are not
+counted as separate page views.
+
+To verify a deployment without an ad blocker, confirm that the browser loads exactly one tracker
+script and sends a POST to `PUBLIC_PLAUSIBLE_URL/api/event` for the initial view and each pathname
+navigation. Confirm that no Plausible cookies are created and that the visits appear in the Plausible
+dashboard. The dashboard's site settings also provide an installation verification tool. If a
+Content Security Policy is added, allow the Plausible origin in both `script-src` and `connect-src`.
+
+### Robot Indexing
+
+Set `ROBOTS_ALLOW_INDEXING=true` only in production. Any other value, including an omitted variable,
+makes `/robots.txt` disallow all paths and adds `X-Robots-Tag: noindex, nofollow, noarchive` to server
+responses. Pre-production and pull-request deployments must leave indexing disabled. These directives
+discourage compliant crawlers but are not access control; protect private environments at the ingress
+or with authentication.
 
 The Svelte plugin, forced runes mode, Tailwind plugin, test projects, development proxy, and
 `adapter-node` are all configured in `vite.config.ts`; this package intentionally has no separate
@@ -97,8 +123,10 @@ with runtime configuration injected by the deployment platform:
 ```bash
 docker run --rm --publish 3000:3000 \
   --env PUBLIC_API_URL=https://api.claim.anthonypillot.com \
+  --env PUBLIC_PLAUSIBLE_URL=https://plausible.monitoring.anthonypillot.com \
   --env PUBLIC_WEB_URL=https://claim.anthonypillot.com \
   --env ORIGIN=https://claim.anthonypillot.com \
+  --env ROBOTS_ALLOW_INDEXING=true \
   claim-web
 ```
 

@@ -5,7 +5,7 @@
   import SiteFooter from "$lib/components/site-footer.svelte";
   import SiteHeader from "$lib/components/site-header.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import { getApiUrl, getWebUrl } from "$lib/config";
+  import { getApiUrl, getPlausibleAnalytics, getWebUrl } from "$lib/config";
   import "./layout.css";
 
   let { children } = $props();
@@ -14,6 +14,7 @@
   let favicon = $derived(isDark ? "/favicon-white.svg" : "/favicon.svg");
   let canonicalUrl = $derived(getWebUrl(page.url.pathname, page.url.origin));
   const apiUrl = getApiUrl("/openapi");
+  const plausibleAnalytics = getPlausibleAnalytics();
 
   onMount(() => {
     function syncTheme() {
@@ -37,6 +38,13 @@
   <link rel="canonical" href={canonicalUrl} />
   <link rel="icon" type="image/svg+xml" href={favicon} />
   <link rel="apple-touch-icon" href="/brand/favicon-180.png" />
+  {#if plausibleAnalytics}
+    <script
+      defer
+      data-domain={plausibleAnalytics.domain}
+      src={plausibleAnalytics.scriptUrl}
+    ></script>
+  {/if}
 </svelte:head>
 <ModeWatcher />
 <Tooltip.Provider>

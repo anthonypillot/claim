@@ -90,8 +90,10 @@ jobs:
           docker run --detach --name "${{ inputs.image }}-smoke" --platform linux/amd64
           --publish 3000:3000
           --env PUBLIC_API_URL=http://127.0.0.1:3000
+          --env PUBLIC_PLAUSIBLE_URL=https://plausible.monitoring.anthonypillot.com
           --env PUBLIC_WEB_URL=http://127.0.0.1:3000
           --env ORIGIN=http://127.0.0.1:3000
+          --env ROBOTS_ALLOW_INDEXING=false
           "${{ inputs.image }}:smoke"
 
       - name: ❤️ Check image health
