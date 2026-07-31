@@ -1,6 +1,6 @@
 import { cors } from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 
 import faviconSvg from "../../web/static/favicon.svg" with { type: "text" };
 import { createGiveaways } from "./modules/giveaways/index.ts";
@@ -9,6 +9,12 @@ import { createLogger } from "./utils/logger.ts";
 
 const log = createLogger("http");
 const favicon = `data:image/svg+xml,${encodeURIComponent(faviconSvg)}`;
+
+const ApiMetadataResponseSchema = t.Object({
+  name: t.String(),
+  version: t.String(),
+  description: t.String(),
+});
 
 export type AppMetadata = {
   name: string;
@@ -43,6 +49,7 @@ export function buildApp(metadata: AppMetadata, dependencies: AppDependencies = 
           },
         },
         documentation: {
+          openapi: "3.1.0",
           ...(dependencies.apiUrl ? { servers: [{ url: dependencies.apiUrl }] } : {}),
           info: {
             title: displayName,
@@ -62,11 +69,15 @@ export function buildApp(metadata: AppMetadata, dependencies: AppDependencies = 
         "request completed",
       );
     })
-    .get("/", () => ({
-      name: displayName,
-      version: metadata.version,
-      description: metadata.description,
-    }))
+    .get(
+      "/",
+      () => ({
+        name: displayName,
+        version: metadata.version,
+        description: metadata.description,
+      }),
+      { response: { 200: ApiMetadataResponseSchema } },
+    )
     .use(createHealth(dependencies.checkReadiness))
     .use(createGiveaways());
 }

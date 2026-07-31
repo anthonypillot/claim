@@ -47,7 +47,7 @@ export function createGiveaways(getDatabase: () => Database = getDb) {
         return status(500, { error: "Internal server error" });
       }
     })
-    .get("/", ({ query }) => getAllFreeGamesCached(getDatabase(), resolveMarket(query)), {
+    .get("", ({ query }) => getAllFreeGamesCached(getDatabase(), resolveMarket(query)), {
       query: GiveawaysQuerySchema,
       response: {
         200: AllGiveawaysResponseSchema,
