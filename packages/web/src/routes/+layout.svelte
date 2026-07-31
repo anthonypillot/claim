@@ -2,9 +2,10 @@
   import { page } from "$app/state";
   import { ModeWatcher } from "mode-watcher";
   import { onMount } from "svelte";
+  import SiteFooter from "$lib/components/site-footer.svelte";
   import SiteHeader from "$lib/components/site-header.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import { getWebUrl } from "$lib/config";
+  import { getApiUrl, getWebUrl } from "$lib/config";
   import "./layout.css";
 
   let { children } = $props();
@@ -12,6 +13,7 @@
 
   let favicon = $derived(isDark ? "/favicon-white.svg" : "/favicon.svg");
   let canonicalUrl = $derived(getWebUrl(page.url.pathname, page.url.origin));
+  const apiUrl = getApiUrl("/openapi");
 
   onMount(() => {
     function syncTheme() {
@@ -38,6 +40,11 @@
 </svelte:head>
 <ModeWatcher />
 <Tooltip.Provider>
-  <SiteHeader />
-  {@render children()}
+  <div class="flex min-h-svh flex-col">
+    <SiteHeader />
+    <div class="flex-1">
+      {@render children()}
+    </div>
+    <SiteFooter {apiUrl} version={__APP_VERSION__} />
+  </div>
 </Tooltip.Provider>

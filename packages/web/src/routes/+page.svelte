@@ -140,7 +140,7 @@
   <meta name="description" content="Discover free-to-keep games available now across major storefronts." />
 </svelte:head>
 
-<main class="mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-7xl flex-col gap-10 px-5 py-10 sm:px-8 lg:py-14">
+<main class="mx-auto flex w-full max-w-7xl flex-col gap-10 px-5 py-10 sm:px-8 lg:py-14">
   <section
     aria-labelledby="page-title"
     class="relative isolate min-h-96 overflow-hidden border"

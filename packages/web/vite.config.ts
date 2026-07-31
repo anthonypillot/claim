@@ -3,8 +3,14 @@ import { defineConfig } from "vitest/config";
 import { playwright } from "@vitest/browser-playwright";
 import adapter from "@sveltejs/adapter-node";
 import { sveltekit } from "@sveltejs/kit/vite";
+import { version as packageVersion } from "./package.json" with { type: "json" };
+
+const appVersion = process.env["APP_VERSION"] || packageVersion;
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   server: {
     proxy: {
       "/api": {

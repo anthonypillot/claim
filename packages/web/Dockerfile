@@ -23,6 +23,10 @@ RUN bun install --frozen-lockfile --production --filter web
 
 FROM base AS build
 
+ARG APP_VERSION
+
+ENV APP_VERSION=${APP_VERSION}
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/web/node_modules ./packages/web/node_modules
 COPY . .
