@@ -129,10 +129,13 @@ describe("health probes", () => {
       "/giveaways/gog",
       "/giveaways/steam",
     ]) {
-      expect(Object.keys(spec.paths?.[path]?.get?.responses ?? {}).toSorted()).toEqual(expectedResponses);
+      expect(Object.keys(spec.paths?.[path]?.get?.responses ?? {}).toSorted()).toEqual(
+        expectedResponses,
+      );
     }
 
-    const aggregateSchema = spec.paths?.["/giveaways"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema;
+    const aggregateSchema =
+      spec.paths?.["/giveaways"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema;
     expect(JSON.stringify(aggregateSchema).match(/"format":"uri"/g)).toHaveLength(4);
   });
 
