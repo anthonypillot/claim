@@ -1,3 +1,10 @@
+## [1.1.4](https://github.com/anthonypillot/claim/compare/v1.1.3...v1.1.4) (2026-07-31)
+
+
+### Bug Fixes
+
+* **api:** refresh cache at giveaway rollover ([#45](https://github.com/anthonypillot/claim/issues/45)) ([cc178e7](https://github.com/anthonypillot/claim/commit/cc178e7339381b2bc13ebc213301c60818ce9414))
+
 ## [1.1.3](https://github.com/anthonypillot/claim/compare/v1.1.2...v1.1.3) (2026-07-30)
 
 
