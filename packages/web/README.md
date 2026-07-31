@@ -87,6 +87,10 @@ Build the production image from the repository root:
 docker build --pull --file packages/web/Dockerfile --tag claim-web .
 ```
 
+CI passes the published image tag through the `APP_VERSION` build argument so the footer identifies
+the exact image version. Local builds fall back to the synchronized package version; pass
+`--build-arg APP_VERSION=<version>` to identify a custom local image version instead.
+
 The build uses Bun while the production stage runs Node 24 in a non-root distroless image. Start it
 with runtime configuration injected by the deployment platform:
 
