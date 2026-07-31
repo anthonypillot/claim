@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/anthonypillot/claim/compare/v1.2.0...v1.2.1) (2026-07-31)
+
+
+### Bug Fixes
+
+* **api:** align OpenAPI document with public API ([#47](https://github.com/anthonypillot/claim/issues/47)) ([a32f3ef](https://github.com/anthonypillot/claim/commit/a32f3ef064daf2de5a7aedd7a30100d2b712495d))
+
 # [1.2.0](https://github.com/anthonypillot/claim/compare/v1.1.4...v1.2.0) (2026-07-31)
 
 
