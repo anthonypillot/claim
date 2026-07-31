@@ -1,3 +1,4 @@
+import { compileErrors, validate } from "@readme/openapi-parser";
 import { describe, expect, it } from "bun:test";
 
 import { buildApp, formatApiName } from "./app.ts";
@@ -8,6 +9,25 @@ const TEST_METADATA = {
   name: "claim",
   version: "1.2.3",
   description: "Test description",
+};
+
+type OpenApiOperation = {
+  responses?: Record<
+    string,
+    {
+      content?: {
+        "application/json"?: {
+          schema?: unknown;
+        };
+      };
+    }
+  >;
+};
+
+type OpenApiDocument = {
+  info?: { title?: string };
+  paths?: Record<string, { get?: OpenApiOperation }>;
+  servers?: { url?: string }[];
 };
 
 describe("formatApiName", () => {
@@ -78,11 +98,7 @@ describe("health probes", () => {
     const app = buildApp(TEST_METADATA, { apiUrl: API_URL });
 
     const response = await app.handle(new Request(`${ROOT_URL}openapi/json`));
-    const spec = (await response.json()) as {
-      info?: { title?: string };
-      paths?: Record<string, { get?: { responses?: Record<string, unknown> } }>;
-      servers?: { url?: string }[];
-    };
+    const spec = (await response.json()) as OpenApiDocument;
 
     expect(response.status).toBe(200);
     expect(spec.info?.title).toBe("Claim API");
@@ -90,6 +106,34 @@ describe("health probes", () => {
     expect(spec.paths?.["/health"]?.get?.responses?.["200"]).toBeDefined();
     expect(spec.paths?.["/ready"]?.get?.responses?.["200"]).toBeDefined();
     expect(spec.paths?.["/ready"]?.get?.responses?.["503"]).toBeDefined();
+  });
+
+  it("publishes a valid OpenAPI contract for every giveaway route", async () => {
+    const app = buildApp(TEST_METADATA, { apiUrl: API_URL });
+
+    const response = await app.handle(new Request(`${ROOT_URL}openapi/json`));
+    const document = await response.text();
+    const spec = JSON.parse(document) as OpenApiDocument;
+    const validation = await validate(JSON.parse(document));
+
+    expect(response.status).toBe(200);
+    if (!validation.valid) throw new Error(compileErrors(validation));
+    expect(validation.valid).toBe(true);
+    expect(spec.paths?.["/giveaways/"]).toBeUndefined();
+
+    const expectedResponses = ["200", "422", "500", "502"];
+    for (const path of [
+      "/giveaways",
+      "/giveaways/epic-games",
+      "/giveaways/prime-gaming",
+      "/giveaways/gog",
+      "/giveaways/steam",
+    ]) {
+      expect(Object.keys(spec.paths?.[path]?.get?.responses ?? {}).toSorted()).toEqual(expectedResponses);
+    }
+
+    const aggregateSchema = spec.paths?.["/giveaways"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema;
+    expect(JSON.stringify(aggregateSchema).match(/"format":"uri"/g)).toHaveLength(4);
   });
 
   it("allows arbitrary browser origins through CORS", async () => {
