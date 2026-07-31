@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/anthonypillot/claim/compare/v1.1.4...v1.2.0) (2026-07-31)
+
+
+### Features
+
+* **web:** add site footer ([b049f9f](https://github.com/anthonypillot/claim/commit/b049f9fb2555466bfdba50c35bf438be743981d9))
+
 ## [1.1.4](https://github.com/anthonypillot/claim/compare/v1.1.3...v1.1.4) (2026-07-31)
 
 
