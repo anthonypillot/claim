@@ -9,7 +9,7 @@ export default {
       "@semantic-release/exec",
       {
         prepareCmd:
-          "bun pm pkg set version=${nextRelease.version} && bun pm --cwd packages/api pkg set version=${nextRelease.version} && bun pm --cwd packages/web pkg set version=${nextRelease.version} && bun install --lockfile-only && bun run verify",
+          "bun pm pkg set version=${nextRelease.version} && bun pm --cwd packages/api pkg set version=${nextRelease.version} && bun pm --cwd packages/web pkg set version=${nextRelease.version} && bun install --lockfile-only && bun run version:check",
       },
     ],
     [

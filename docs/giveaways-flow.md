@@ -1,69 +1,57 @@
-# Giveaways request flow
+# Giveaways cache flow
 
-`GET /giveaways*` is a read-through cache over Postgres. Cache scopes are independent per store,
-locale, and country, with a 24-hour TTL. Supported locale/country inputs are canonicalized before
-they reach an upstream or become cache keys.
+`GET /giveaways*` uses a request-driven read-through cache in Postgres. There is no scheduled job or
+manual refresh endpoint: the first request for stale data refreshes it from the relevant store.
 
-| Participant | Code |
-| --- | --- |
-| Route | `index.ts` - query validation and HTTP error mapping |
-| Service | `service.ts` - per-store freshness and upstream orchestration |
-| Repository | `repository.ts` - refresh leases, transactional snapshots, and row/API mapping |
-| DB | `giveaways` history plus `giveaway_fetches` freshness, failure, and lease state |
-| Stores | `stores/*` upstream adapters |
+## Cache scope
 
-## Aggregate request
+Each `(store, locale, country)` combination has its own cache. For example, Epic Games for `en-US` and
+`US` is independent from Epic Games for `fr-FR` and `FR`, and from every other store.
 
-```mermaid
-sequenceDiagram
-    actor Client
-    participant Route
-    participant Service
-    participant Repository
-    participant DB
-    participant Stores
+The aggregate `GET /giveaways` endpoint checks all store scopes for the requested market. A per-store
+endpoint such as `GET /giveaways/epic-games` checks only that store.
 
-    Client->>Route: GET /giveaways?locale&country
-    Note over Route: Validate, canonicalize, reject unsupported values with 422
-    Route->>Service: getAllFreeGamesCached(db, market)
-    Note over Service: Coordinate each scope through an in-process single-flight
-    Service->>Repository: Acquire leases for stale scopes
-    Repository->>DB: Atomic lease upsert per store/locale/country
-    DB-->>Service: Lease owners, fresh scopes, cooldowns, or active leases
-    Service->>Stores: Lease owners fetch stale stores concurrently
-    Stores-->>Service: Per-store results or failures
+## When stores are called
 
-    loop Each successful stale store
-        Service->>Repository: refreshStore(market, store, giveaways, lease token)
-        Repository->>DB: Transaction: verify token, replace snapshot, clear lease/failure
-    end
+| Cache state | Result | Upstream call |
+| --- | --- | --- |
+| Current snapshot is fresh | Serve it from Postgres | No |
+| Earliest cached giveaway expires | The next request refreshes that store | Yes |
+| Snapshot reaches the 24-hour maximum TTL | The next request refreshes that store | Yes |
+| Last successful result was empty | Serve empty for up to 24 hours | No |
+| Refresh fails | Preserve usable cached giveaways and wait five minutes before retrying | One failed attempt |
+| Several requests arrive together | They share the same refresh work | One per cache scope |
 
-    loop Each failed stale store
-        Service->>Repository: recordRefreshFailure(market, store, lease token)
-        Repository->>DB: Preserve snapshot, start five-minute cooldown, clear lease
-    end
+A non-empty snapshot is fresh until the earlier of:
 
-    Service->>Repository: findActiveGiveaways(market)
-    Repository->>DB: SELECT known stores WHERE is_active AND free_until > now()
-    DB-->>Service: Current rows
-    Service-->>Route: Fresh/updated/stale rows plus degraded-store errors
-    Route-->>Client: 200, or 502 when no store has usable data
-```
+1. Its earliest giveaway expiration.
+2. Twenty-four hours after it was fetched.
 
-## Refresh semantics
+This expiry-aware deadline handles store rotations. When old Epic Games offers end, the next request
+fetches the newly started offers instead of serving an empty result until the 24-hour TTL ends.
 
-- Upstream response bodies are streamed with a 5 MiB decoded-size limit before HTML or JSON
-  parsing; declared and undeclared oversized bodies fail the store refresh.
-- Upstream I/O, shape validation, and external URL normalization finish before the database
-  transaction starts. Only credential-free HTTP(S) URLs are persisted; unsafe or malformed URL
-  fields become `null`.
-- A successful empty response deactivates the previous store snapshot and advances its marker.
-- A giveaway omitted by the latest response remains in the table with `is_active = false`.
-- A returning giveaway is reactivated, keeps `first_seen_at`, and advances `last_seen_at`.
-- A failed upstream is not written or marked fresh. Its last successful snapshot remains active and
-  is served when its giveaway window has not expired.
-- Failed scopes are retried after a five-minute cooldown rather than on every request.
-- Concurrent refreshes share one promise within a process. A token-guarded 60-second database lease
-  prevents multiple replicas from fetching the same scope; expired leases can be reclaimed safely.
-- A database failure rolls back deactivation, upserts, and the freshness marker together.
-- Per-store endpoints use the same coordinated refresh path but check and fetch only one store.
+This can add one useful upstream call at a giveaway rollover. It does not add a call per visitor:
+in-process coordination and a Postgres lease ensure that concurrent requests share one refresh for the
+same store, locale, and country.
+
+## Request flow
+
+1. Validate and canonicalize the requested locale and country.
+2. Check each requested store's freshness marker in Postgres.
+3. Serve fresh scopes directly from Postgres.
+4. Acquire a 60-second lease and fetch each stale scope from its store.
+5. Replace successful snapshots transactionally, then serve current, unexpired rows.
+
+## Failures and history
+
+- A successful empty result deactivates the previous snapshot and remains fresh for up to 24 hours.
+- A failed refresh does not replace the previous snapshot or mark it fresh.
+- Cached giveaways are served after a failure only while their free window is still active.
+- Failed scopes wait five minutes before another request retries them.
+- Aggregate responses list degraded stores in `errors`; a per-store request returns `502` when no
+  successful snapshot is available.
+- Omitted giveaways become inactive rather than being deleted, preserving first- and last-seen history.
+- A database error rolls back the snapshot replacement and freshness update together.
+
+Upstream responses are limited to 5 MiB before parsing. Only credential-free HTTP(S) giveaway and image
+URLs are persisted; malformed or unsafe URLs are stored as `null`.
