@@ -12,7 +12,8 @@ each store's history.
 
 Start the server, then open the interactive API documentation at
 [`http://localhost:3000/openapi`](http://localhost:3000/openapi). The raw OpenAPI document is at
-[`/openapi/json`](http://localhost:3000/openapi/json).
+[`/openapi/json`](http://localhost:3000/openapi/json). It targets OpenAPI 3.1 and is validated by the
+API test suite in CI.
 
 | Endpoint                      | Description                                                    |
 | ----------------------------- | -------------------------------------------------------------- |
