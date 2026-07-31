@@ -79,15 +79,13 @@ container liveness probe to remain independent of Postgres.
 
 ## Database and cache
 
-`GET /giveaways*` is a read-through cache. Each `(store, locale, country)` scope is fresh for
-24 hours. A stale scope fetches live data, replaces its active snapshot transactionally, and then
-serves the cached result. Empty results are cached. A failed refresh preserves and serves the last
-successful snapshot, reports degraded freshness in aggregate `errors`, and waits five minutes
-before retrying. Concurrent refreshes share one in-process request, while a 60-second database lease
-prevents duplicate upstream calls across replicas. Inactive rows retain first- and last-seen
-history. Upstream HTML and JSON responses are limited to 5 MiB before parsing. External giveaway
-and artwork URLs are canonicalized, restricted to credential-free HTTP(S), and stored as `null`
-when malformed or unsafe.
+`GET /giveaways*` uses a request-driven read-through cache. Each `(store, locale, country)` scope is
+fresh until its earliest giveaway expires or its 24-hour maximum TTL ends. The next request refreshes
+only stale scopes. Empty results remain cached for up to 24 hours, failures preserve usable cached
+giveaways, and coordinated refreshes prevent duplicate upstream calls.
+
+See [`docs/giveaways-flow.md`](../../docs/giveaways-flow.md) for the cache cases, failure behavior, and
+upstream call impact.
 
 The schema lives in `src/db/schema.ts`; generated SQL migrations live in `drizzle/`.
 

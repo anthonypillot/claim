@@ -59,17 +59,15 @@ packages/api/
 
 ## Persistence (read-through cache)
 
-See [`giveaways-flow.md`](./giveaways-flow.md) for the read-through sequence diagram.
+See [`giveaways-flow.md`](./giveaways-flow.md) for the cache decisions and request flow.
 
 `GET /giveaways*` is a **read-through cache** over **Postgres** (Drizzle ORM on Bun's native SQL driver).
-Freshness is tracked independently per `(store, locale, country)`, so aggregate reads fetch only stale stores.
-A successful refresh transaction deactivates the store's previous snapshot, upserts the latest rows as active,
-and advances its `giveaway_fetches` marker. Current results require `is_active` and `free_until > now()`;
-inactive rows retain lightweight first/last-seen history. An empty refresh therefore serves empty without
-re-fetching. An upstream failure leaves the previous scope untouched and serves its still-active stale rows;
-aggregate responses list that store in `errors`. Failed scopes cool down for five minutes. Refreshes are
-deduplicated in-process and protected across replicas by a token-guarded 60-second database lease, so a late
-worker cannot overwrite a newer owner's snapshot.
+Freshness is tracked independently per `(store, locale, country)`. Non-empty snapshots become stale at their
+earliest giveaway expiry or after 24 hours, whichever comes first; empty snapshots use the 24-hour maximum.
+Successful refreshes replace active snapshots transactionally, while failures preserve usable cached rows.
+In-process coordination and a token-guarded Postgres lease deduplicate concurrent refreshes.
+
+See [`giveaways-flow.md`](./giveaways-flow.md) for the complete cache decision table and failure behavior.
 
 `src/db/` holds shared persistence infrastructure: connection/test plumbing and centralized Drizzle table
 definitions. Following Drizzle's default layout, table definitions live in `src/db/schema.ts`
