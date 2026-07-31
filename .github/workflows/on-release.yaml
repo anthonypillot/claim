@@ -86,6 +86,7 @@ jobs:
       registry-token: ${{ secrets.GITHUB_TOKEN }}
 
   deploy:
+    name: 🚀 Deploy
     needs: [build, images]
     uses: ./.github/workflows/deploy.yaml
     with:
