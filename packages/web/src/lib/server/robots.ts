@@ -2,17 +2,21 @@ import { env } from "$env/dynamic/private";
 
 const RESTRICTED_ROBOTS_HEADER = "noindex, nofollow, noarchive";
 
-export function isRobotIndexingAllowed(value = env["ROBOTS_ALLOW_INDEXING"]): boolean {
+export function isRobotIndexingAllowed(value: string | undefined): boolean {
   return value === "true";
 }
 
-export function getRobotsTxt(indexingAllowed = isRobotIndexingAllowed()): string {
+function isConfiguredRobotIndexingAllowed(): boolean {
+  return isRobotIndexingAllowed(env["ROBOTS_ALLOW_INDEXING"]);
+}
+
+export function getRobotsTxt(indexingAllowed = isConfiguredRobotIndexingAllowed()): string {
   return `User-agent: *\nDisallow:${indexingAllowed ? "" : " /"}\n`;
 }
 
 export function applyRobotsPolicy(
   response: Response,
-  indexingAllowed = isRobotIndexingAllowed(),
+  indexingAllowed = isConfiguredRobotIndexingAllowed(),
 ): Response {
   if (indexingAllowed) return response;
 

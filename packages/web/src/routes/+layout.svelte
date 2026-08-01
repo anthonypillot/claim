@@ -36,6 +36,7 @@
 <svelte:head>
   <title>Claim</title>
   <link rel="canonical" href={canonicalUrl} />
+  <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
   <link rel="icon" type="image/svg+xml" href={favicon} />
   <link rel="apple-touch-icon" href="/brand/favicon-180.png" />
   {#if plausibleAnalytics}

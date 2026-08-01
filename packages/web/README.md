@@ -59,8 +59,9 @@ shadcn-svelte configuration lives in `components.json`. Installed primitives are
 `src/lib/components/ui`, shared theme variables are in `src/routes/layout.css`, and application
 components live directly under `src/lib/components`.
 
-`bun run brand:export` regenerates and verifies the SVG sources in `static/` and raster variants in
-`static/brand/`. Treat those files as generated outputs of `scripts/export-brand-assets.js`.
+`bun run brand:export` regenerates and verifies the SVG and ICO sources in `static/` and raster
+variants in `static/brand/`. Treat those files as generated outputs of
+`scripts/export-brand-assets.js`.
 
 ## Configuration And Deployment
 
