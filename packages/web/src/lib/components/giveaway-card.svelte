@@ -16,6 +16,16 @@
   const timeLeft = $derived(formatTimeLeft(giveaway.freeUntil, now));
   const expiryLabel = $derived(expiry === "Unknown" ? timeLeft : `${timeLeft}; ends ${expiry} UTC`);
   const expiryTooltip = $derived(expiry === "Unknown" ? "End date unknown" : `Ends ${expiry} UTC`);
+
+  function trackGiveawayClick() {
+    window.plausible?.("Giveaway Click", {
+      props: {
+        giveaway_id: giveaway.id,
+        giveaway_title: giveaway.title,
+        store: giveaway.store,
+      },
+    });
+  }
 </script>
 
 <Card.Root class="h-full">
@@ -70,7 +80,14 @@
   </Card.Content>
 
   <Card.Footer>
-    <Button href={giveaway.url ?? undefined} disabled={!giveaway.url} target="_blank" rel="noreferrer" class="w-full">
+    <Button
+      href={giveaway.url ?? undefined}
+      disabled={!giveaway.url}
+      target="_blank"
+      rel="noreferrer"
+      class="w-full"
+      onclick={trackGiveawayClick}
+    >
       {giveaway.url ? "View giveaway" : "Store link unavailable"}
       {#if giveaway.url}
         <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />
