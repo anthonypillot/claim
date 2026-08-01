@@ -5,7 +5,7 @@
   import SiteFooter from "$lib/components/site-footer.svelte";
   import SiteHeader from "$lib/components/site-header.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import { getApiUrl, getPlausibleAnalytics, getWebUrl } from "$lib/config";
+  import { getApiUrl, getPlausibleScriptUrl, getWebUrl } from "$lib/config";
   import "./layout.css";
 
   let { children } = $props();
@@ -14,7 +14,7 @@
   let favicon = $derived(isDark ? "/favicon-white.svg" : "/favicon.svg");
   let canonicalUrl = $derived(getWebUrl(page.url.pathname, page.url.origin));
   const apiUrl = getApiUrl("/openapi");
-  const plausibleAnalytics = getPlausibleAnalytics();
+  const plausibleScriptUrl = getPlausibleScriptUrl();
 
   onMount(() => {
     function syncTheme() {
@@ -39,12 +39,17 @@
   <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
   <link rel="icon" type="image/svg+xml" href={favicon} />
   <link rel="apple-touch-icon" href="/brand/favicon-180.png" />
-  {#if plausibleAnalytics}
-    <script
-      defer
-      data-domain={plausibleAnalytics.domain}
-      src={plausibleAnalytics.scriptUrl}
-    ></script>
+  {#if plausibleScriptUrl}
+    <script async src={plausibleScriptUrl}></script>
+    <script>
+      window.plausible = window.plausible || function () {
+        (plausible.q = plausible.q || []).push(arguments);
+      };
+      plausible.init = plausible.init || function (options) {
+        plausible.o = options || {};
+      };
+      plausible.init();
+    </script>
   {/if}
 </svelte:head>
 <ModeWatcher />

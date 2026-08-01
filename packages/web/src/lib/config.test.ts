@@ -1,47 +1,38 @@
 import { describe, expect, test } from "vitest";
-import { resolvePlausibleAnalytics } from "./config";
+import { resolvePlausibleScriptUrl } from "./config";
 
 const productionEnvironment = {
-  PUBLIC_PLAUSIBLE_URL: "https://plausible.monitoring.anthonypillot.com",
-  PUBLIC_WEB_URL: "https://claim.anthonypillot.com",
+  PUBLIC_PLAUSIBLE_SCRIPT_URL:
+    "https://plausible.monitoring.anthonypillot.com/js/pa-D95gD7Xk4gbNpDXKDnm4m.js",
 };
 
-describe("resolvePlausibleAnalytics", () => {
+describe("resolvePlausibleScriptUrl", () => {
   test("does not configure analytics during development", () => {
-    expect(resolvePlausibleAnalytics(true, {})).toBeNull();
+    expect(resolvePlausibleScriptUrl(true, {})).toBeNull();
   });
 
-  test("configures the self-hosted tracker for production", () => {
-    expect(resolvePlausibleAnalytics(false, productionEnvironment)).toEqual({
-      domain: "claim.anthonypillot.com",
-      scriptUrl: "https://plausible.monitoring.anthonypillot.com/js/script.js",
-    });
-  });
-
-  test("normalizes configured origins", () => {
-    expect(
-      resolvePlausibleAnalytics(false, {
-        PUBLIC_PLAUSIBLE_URL: "https://plausible.monitoring.anthonypillot.com/",
-        PUBLIC_WEB_URL: "https://claim.anthonypillot.com/",
-      }),
-    ).toEqual({
-      domain: "claim.anthonypillot.com",
-      scriptUrl: "https://plausible.monitoring.anthonypillot.com/js/script.js",
-    });
+  test("uses the generated self-hosted tracker", () => {
+    expect(resolvePlausibleScriptUrl(false, productionEnvironment)).toBe(
+      productionEnvironment.PUBLIC_PLAUSIBLE_SCRIPT_URL,
+    );
   });
 
   test.each([
-    ["missing Plausible URL", { PUBLIC_WEB_URL: productionEnvironment.PUBLIC_WEB_URL }],
-    ["missing web URL", { PUBLIC_PLAUSIBLE_URL: productionEnvironment.PUBLIC_PLAUSIBLE_URL }],
+    ["missing script URL", {}],
     [
-      "Plausible URL with a path",
-      { ...productionEnvironment, PUBLIC_PLAUSIBLE_URL: "https://example.com/a" },
+      "script origin without a path",
+      { PUBLIC_PLAUSIBLE_SCRIPT_URL: "https://plausible.monitoring.anthonypillot.com" },
+    ],
+    ["non-HTTP script URL", { PUBLIC_PLAUSIBLE_SCRIPT_URL: "ftp://example.com/script.js" }],
+    [
+      "script URL with credentials",
+      { PUBLIC_PLAUSIBLE_SCRIPT_URL: "https://user@example.com/script.js" },
     ],
     [
-      "non-HTTP Plausible URL",
-      { ...productionEnvironment, PUBLIC_PLAUSIBLE_URL: "ftp://example.com" },
+      "script URL with a query",
+      { PUBLIC_PLAUSIBLE_SCRIPT_URL: "https://example.com/script.js?v=1" },
     ],
   ])("rejects %s", (_, environment) => {
-    expect(() => resolvePlausibleAnalytics(false, environment)).toThrow(/PUBLIC_|HTTP/);
+    expect(() => resolvePlausibleScriptUrl(false, environment)).toThrow(/PUBLIC_|HTTP/);
   });
 });
