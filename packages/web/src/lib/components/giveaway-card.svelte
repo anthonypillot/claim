@@ -20,7 +20,6 @@
   function trackGiveawayClick() {
     window.plausible?.("Giveaway Click", {
       props: {
-        giveaway_id: giveaway.id,
         giveaway_title: giveaway.title,
         store: giveaway.store,
       },

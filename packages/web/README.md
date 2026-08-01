@@ -98,9 +98,9 @@ navigation. Query-only giveaway filter changes are UI state and are not counted 
 views. The tracker and initializer are omitted during local development and automated tests.
 
 Clicking an available **View giveaway** link sends a `Giveaway Click` custom event with the giveaway
-ID, title, and store as properties. Add a matching custom-event goal named `Giveaway Click` in each
-Plausible site's settings before expecting conversions to appear in its dashboard. Disabled store
-links do not emit an event.
+title and store as properties. Add a matching custom-event goal named `Giveaway Click` in each
+Plausible site's settings before expecting conversions to appear in its dashboard. Disabled store links
+do not emit an event.
 
 Changing the site's measurements in Plausible can generate a new script URL. Update the corresponding
 deployment environment variable whenever that happens; do not reuse one environment's generated

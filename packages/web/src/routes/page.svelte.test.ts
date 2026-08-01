@@ -107,7 +107,6 @@ test("tracks clicks on available giveaway links", async () => {
     expect(plausible).toHaveBeenCalledOnce();
     expect(plausible).toHaveBeenCalledWith("Giveaway Click", {
       props: {
-        giveaway_id: "epic",
         giveaway_title: "Epic Giveaway",
         store: "epic-games",
       },
