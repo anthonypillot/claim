@@ -11,7 +11,9 @@ function isConfiguredRobotIndexingAllowed(): boolean {
 }
 
 export function getRobotsTxt(indexingAllowed = isConfiguredRobotIndexingAllowed()): string {
-  return `User-agent: *\nDisallow:${indexingAllowed ? "" : " /"}\n`;
+  return indexingAllowed
+    ? "User-agent: *\nDisallow:\n"
+    : "User-agent: *\nDisallow: /\nAllow: /favicon.ico\n";
 }
 
 export function applyRobotsPolicy(

@@ -118,9 +118,10 @@ with a hash or nonce.
 
 Set `ROBOTS_ALLOW_INDEXING=true` only in production. Any other value, including an omitted variable,
 makes `/robots.txt` disallow all paths and adds `X-Robots-Tag: noindex, nofollow, noarchive` to server
-responses. Pre-production and pull-request deployments must leave indexing disabled. These directives
-discourage compliant crawlers but are not access control; protect private environments at the ingress
-or with authentication.
+responses. The generated policy still allows `/favicon.ico` so analytics dashboards and other clients
+can retrieve the site icon. Pre-production and pull-request deployments must leave indexing disabled.
+These directives discourage compliant crawlers but are not access control; protect private environments
+at the ingress or with authentication.
 
 The Svelte plugin, forced runes mode, Tailwind plugin, test projects, development proxy, and
 `adapter-node` are all configured in `vite.config.ts`; this package intentionally has no separate

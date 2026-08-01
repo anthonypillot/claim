@@ -12,8 +12,8 @@ describe("robot policy", () => {
     expect(getRobotsTxt(true)).toBe("User-agent: *\nDisallow:\n");
   });
 
-  test("discourages compliant crawlers outside production", () => {
-    expect(getRobotsTxt(false)).toBe("User-agent: *\nDisallow: /\n");
+  test("discourages compliant crawlers outside production while allowing the favicon", () => {
+    expect(getRobotsTxt(false)).toBe("User-agent: *\nDisallow: /\nAllow: /favicon.ico\n");
   });
 
   test("adds a restrictive robots header outside production", () => {
