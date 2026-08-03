@@ -59,23 +59,69 @@ shadcn-svelte configuration lives in `components.json`. Installed primitives are
 `src/lib/components/ui`, shared theme variables are in `src/routes/layout.css`, and application
 components live directly under `src/lib/components`.
 
-`bun run brand:export` regenerates and verifies the SVG sources in `static/` and raster variants in
-`static/brand/`. Treat those files as generated outputs of `scripts/export-brand-assets.js`.
+`bun run brand:export` regenerates and verifies the SVG and ICO sources in `static/` and raster
+variants in `static/brand/`. Treat those files as generated outputs of
+`scripts/export-brand-assets.js`.
 
 ## Configuration And Deployment
 
 Production requires these runtime environment variables:
 
-| Variable         | Purpose                                            |
-| ---------------- | -------------------------------------------------- |
-| `PUBLIC_API_URL` | API origin used for requests and the OpenAPI link. |
-| `PUBLIC_WEB_URL` | Web origin used to generate canonical page URLs.   |
-| `ORIGIN`         | Public web origin used by the Node server.         |
-| `PORT`           | Listening port. Defaults to `3000`.                |
+| Variable                      | Purpose                                                 |
+| ----------------------------- | ------------------------------------------------------- |
+| `PUBLIC_API_URL`              | API origin used for requests and the OpenAPI link.      |
+| `PUBLIC_PLAUSIBLE_SCRIPT_URL` | Generated site-specific Plausible analytics script URL. |
+| `PUBLIC_WEB_URL`              | Web origin used to generate canonical page URLs.        |
+| `ORIGIN`                      | Public web origin used by the Node server.              |
+| `ROBOTS_ALLOW_INDEXING`       | Set to `true` only where search indexing is intended.   |
+| `PORT`                        | Listening port. Defaults to `3000`.                     |
 
-Set them to `https://api.claim.anthonypillot.com` and `https://claim.anthonypillot.com`,
-respectively. Values must be HTTP(S) origins without a path, query, or fragment. See `.env.example`
-for a deployable template; local development continues to use the Vite origins and `/api` proxy.
+Set the API and web origins to `https://api.claim.anthonypillot.com` and
+`https://claim.anthonypillot.com`. Origins must not contain a path, query, or fragment. See
+`.env.example` for a deployable production template; local development continues to use the Vite
+origins and `/api` proxy.
+
+### Analytics
+
+Non-development builds load the official generated Plausible tracker from
+`PUBLIC_PLAUSIBLE_SCRIPT_URL` and run its initialization snippet once. Generated scripts encode the
+site domain, event endpoint, and enabled measurements. Use these environment-specific values:
+
+| Environment    | Script URL                                                                      |
+| -------------- | ------------------------------------------------------------------------------- |
+| Pre-production | `https://plausible.monitoring.anthonypillot.com/js/pa-RKgeJwB94o2HZsdvZqhux.js` |
+| Production     | `https://plausible.monitoring.anthonypillot.com/js/pa-D95gD7Xk4gbNpDXKDnm4m.js` |
+
+Both scripts track page views, outbound links, file downloads, and form submissions. They are
+cookie-free and automatically track initial page views and SvelteKit `pushState` and back/forward
+navigation. Query-only giveaway filter changes are UI state and are not counted as separate page
+views. The tracker and initializer are omitted during local development and automated tests.
+
+Clicking an available **View giveaway** link sends a `Giveaway Click` custom event with the giveaway
+title and store as properties. Add a matching custom-event goal named `Giveaway Click` in each
+Plausible site's settings before expecting conversions to appear in its dashboard. Disabled store links
+do not emit an event.
+
+Changing the site's measurements in Plausible can generate a new script URL. Update the corresponding
+deployment environment variable whenever that happens; do not reuse one environment's generated
+script in another environment.
+
+To verify a deployment without an ad blocker, confirm that the browser loads exactly one configured
+tracker script and sends a POST to `https://plausible.monitoring.anthonypillot.com/api/event` for the
+initial view and each pathname navigation. Confirm that no Plausible cookies are created and that the
+visits and optional events appear in the corresponding Plausible dashboard. The dashboard's site
+settings also provide an installation verification tool. If a Content Security Policy is added, allow
+the Plausible origin in `script-src` and `connect-src`, and authorize the inline initialization snippet
+with a hash or nonce.
+
+### Robot Indexing
+
+Set `ROBOTS_ALLOW_INDEXING=true` only in production. Any other value, including an omitted variable,
+makes `/robots.txt` disallow all paths and adds `X-Robots-Tag: noindex, nofollow, noarchive` to server
+responses. The generated policy still allows `/favicon.ico` so analytics dashboards and other clients
+can retrieve the site icon. Pre-production and pull-request deployments must leave indexing disabled.
+These directives discourage compliant crawlers but are not access control; protect private environments
+at the ingress or with authentication.
 
 The Svelte plugin, forced runes mode, Tailwind plugin, test projects, development proxy, and
 `adapter-node` are all configured in `vite.config.ts`; this package intentionally has no separate
@@ -97,8 +143,10 @@ with runtime configuration injected by the deployment platform:
 ```bash
 docker run --rm --publish 3000:3000 \
   --env PUBLIC_API_URL=https://api.claim.anthonypillot.com \
+  --env PUBLIC_PLAUSIBLE_SCRIPT_URL=https://plausible.monitoring.anthonypillot.com/js/pa-D95gD7Xk4gbNpDXKDnm4m.js \
   --env PUBLIC_WEB_URL=https://claim.anthonypillot.com \
   --env ORIGIN=https://claim.anthonypillot.com \
+  --env ROBOTS_ALLOW_INDEXING=true \
   claim-web
 ```
 

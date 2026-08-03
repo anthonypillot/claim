@@ -83,6 +83,39 @@ test("shows giveaways from all stores by default", async () => {
   await expect.element(screen.getByText("Steam Giveaway", { exact: true })).toBeInTheDocument();
 });
 
+test("tracks clicks on available giveaway links", async () => {
+  const plausible = vi.fn();
+  vi.stubGlobal("plausible", plausible);
+
+  try {
+    const items = {
+      count: 1,
+      giveaways: [
+        {
+          ...createGiveaway("epic", "Epic Giveaway", "epic-games"),
+          url: "https://example.com/epic-giveaway",
+        },
+      ],
+      errors: [],
+    } satisfies GiveawaysResponse;
+
+    const screen = await renderPage(items);
+    const giveawayLink = screen.getByRole("link", { name: "View giveaway" });
+    giveawayLink.element().addEventListener("click", (event) => event.preventDefault());
+    await giveawayLink.click();
+
+    expect(plausible).toHaveBeenCalledOnce();
+    expect(plausible).toHaveBeenCalledWith("Giveaway Click", {
+      props: {
+        giveaway_title: "Epic Giveaway",
+        store: "epic-games",
+      },
+    });
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
 test("fills the motion hero with current giveaway artwork", async () => {
   const items = {
     count: 1,

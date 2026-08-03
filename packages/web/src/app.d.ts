@@ -3,6 +3,10 @@
 declare global {
   const __APP_VERSION__: string;
 
+  interface Window {
+    plausible?: (eventName: string, options?: { props?: Record<string, string> }) => void;
+  }
+
   namespace App {
     // interface Error {}
     // interface Locals {}

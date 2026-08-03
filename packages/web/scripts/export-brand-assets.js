@@ -240,6 +240,66 @@ async function verifySvg(path) {
   }
 }
 
+async function exportFaviconIco() {
+  const sizes = [16, 32, 48];
+  const source = resolve(STATIC_DIRECTORY, "favicon.svg");
+  const images = await Promise.all(
+    sizes.map(async (size) => ({
+      data: await sharp(source).resize(size, size).png().toBuffer(),
+      size,
+    })),
+  );
+  const directory = Buffer.alloc(6 + images.length * 16);
+  directory.writeUInt16LE(0, 0);
+  directory.writeUInt16LE(1, 2);
+  directory.writeUInt16LE(images.length, 4);
+
+  let imageOffset = directory.length;
+  for (const [index, image] of images.entries()) {
+    const entryOffset = 6 + index * 16;
+    directory.writeUInt8(image.size, entryOffset);
+    directory.writeUInt8(image.size, entryOffset + 1);
+    directory.writeUInt16LE(1, entryOffset + 4);
+    directory.writeUInt16LE(32, entryOffset + 6);
+    directory.writeUInt32LE(image.data.length, entryOffset + 8);
+    directory.writeUInt32LE(imageOffset, entryOffset + 12);
+    imageOffset += image.data.length;
+  }
+
+  const output = resolve(STATIC_DIRECTORY, "favicon.ico");
+  await Bun.write(output, Buffer.concat([directory, ...images.map(({ data }) => data)]));
+  await verifyFaviconIco(output, sizes);
+}
+
+async function verifyFaviconIco(path, expectedSizes) {
+  const ico = await readFile(path);
+  const hasExpectedHeader =
+    ico.readUInt16LE(0) === 0 &&
+    ico.readUInt16LE(2) === 1 &&
+    ico.readUInt16LE(4) === expectedSizes.length;
+
+  if (!hasExpectedHeader) {
+    throw new Error(`Invalid generated asset: ${path}`);
+  }
+
+  for (const [index, expectedSize] of expectedSizes.entries()) {
+    const entryOffset = 6 + index * 16;
+    const imageLength = ico.readUInt32LE(entryOffset + 8);
+    const imageOffset = ico.readUInt32LE(entryOffset + 12);
+    const metadata = await sharp(ico.subarray(imageOffset, imageOffset + imageLength)).metadata();
+
+    if (
+      ico.readUInt8(entryOffset) !== expectedSize ||
+      ico.readUInt8(entryOffset + 1) !== expectedSize ||
+      metadata.format !== "png" ||
+      metadata.width !== expectedSize ||
+      metadata.height !== expectedSize
+    ) {
+      throw new Error(`Invalid generated asset: ${path}`);
+    }
+  }
+}
+
 async function exportVariant(variant, widths, aspectRatio) {
   const source = resolve(STATIC_DIRECTORY, variant.source);
   await verifySvg(source);
@@ -268,7 +328,9 @@ async function main() {
     await exportVariant(variant, [800, 1600], 420 / 128);
   }
 
-  console.log("Generated and verified 8 SVG sources and 40 raster brand assets.");
+  await exportFaviconIco();
+
+  console.log("Generated and verified 8 SVG sources, 40 raster brand assets, and 1 ICO favicon.");
 }
 
 await main();
