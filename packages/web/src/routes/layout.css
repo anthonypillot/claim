@@ -127,5 +127,22 @@
   }
   html {
     @apply font-sans;
+
+    scrollbar-color: var(--primary) var(--background);
+    scrollbar-width: thin;
+  }
+
+  html::-webkit-scrollbar {
+    width: 0.625rem;
+    height: 0.625rem;
+  }
+
+  html::-webkit-scrollbar-track {
+    background: var(--background);
+  }
+
+  html::-webkit-scrollbar-thumb {
+    background-color: var(--primary);
+    border: 2px solid var(--background);
   }
 }
