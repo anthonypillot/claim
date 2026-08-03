@@ -159,7 +159,7 @@
       class="flex min-h-96 max-w-2xl flex-col items-start justify-center gap-3 px-6 py-12 sm:px-10"
     >
       <BrandLogo kind="lockup" alt="Claim" class="mb-3 h-auto w-64 sm:w-80" />
-      <p class="text-primary text-sm font-medium tracking-widest uppercase">Free to claim, free to keep</p>
+      <p class="text-brand-orange text-sm font-medium tracking-widest uppercase">Free to claim, free to keep</p>
       <h1 id="page-title" class="font-heading text-4xl font-bold tracking-tight sm:text-5xl">Games worth claiming</h1>
       <p class="text-muted-foreground text-lg">
         Current giveaways from Epic Games, Prime Gaming, GOG, and Steam, gathered in one place.
