@@ -17,7 +17,7 @@
     },
     "packages/api": {
       "name": "api",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "dependencies": {
         "@elysiajs/cors": "^1.4.2",
         "@elysiajs/openapi": "^1.4.15",
@@ -36,7 +36,7 @@
     },
     "packages/web": {
       "name": "web",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "dependencies": {
         "gsap": "^3.15.0",
         "mode-watcher": "^1.1.0",

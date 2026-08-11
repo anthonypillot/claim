@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/anthonypillot/claim/compare/v1.0.1...v1.0.2) (2026-08-11)
+
+
+### Bug Fixes
+
+* **web:** handle incomplete and failed giveaway responses accurately ([#50](https://github.com/anthonypillot/claim/issues/50)) ([b922fee](https://github.com/anthonypillot/claim/commit/b922fee1237197e793608f86d55af5a1914ddb8b))
+
 ## [1.0.1](https://github.com/anthonypillot/claim/compare/v1.0.0...v1.0.1) (2026-08-11)
 
 
