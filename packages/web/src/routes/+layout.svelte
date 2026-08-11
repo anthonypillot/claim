@@ -52,7 +52,7 @@
     </script>
   {/if}
 </svelte:head>
-<ModeWatcher />
+<ModeWatcher disableTransitions={false} />
 <Tooltip.Provider>
   <div class="flex min-h-svh flex-col">
     <SiteHeader />
