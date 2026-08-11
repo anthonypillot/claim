@@ -39,8 +39,7 @@
   const failedStores = $derived(new Set(data.items.errors.map((item) => item.store)));
   const selectedStoreFailed = $derived(filters.store !== "all" && failedStores.has(filters.store));
   const resultsUnavailable = $derived(
-    visibleGiveaways.length === 0 &&
-      (filters.store === "all" ? data.items.errors.length > 0 : selectedStoreFailed),
+    visibleGiveaways.length === 0 && (filters.store === "all" ? data.items.errors.length > 0 : selectedStoreFailed),
   );
   const giveawayArtwork = $derived(
     data.items.giveaways.flatMap((giveaway) => {
@@ -65,7 +64,7 @@
         .timeline({ defaults: { ease: "power3.out" } })
         .from(heroGrid, {
           opacity: 0,
-          scale: 60,
+          scale: 2,
           duration: 4,
           clearProps: "opacity,transform",
         })

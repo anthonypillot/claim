@@ -64,7 +64,6 @@
         <div
           bind:this={rowElements[rowIndex]}
           class="grid grid-cols-7 gap-3 sm:gap-4"
-          style="will-change: transform"
         >
           {#each itemIndexes as itemIndex (itemIndex)}
             {@const image = combinedItems[rowIndex * itemIndexes.length + itemIndex]}
