@@ -16,7 +16,7 @@
     type GiveawayFilters as GiveawayFilterState,
     type StoreFilter,
   } from "$lib/giveaways/filters";
-  import { formatStore, getGiveawayImage } from "$lib/giveaways/model";
+  import { formatStore, getGiveawayImage, STORE_IDS } from "$lib/giveaways/model";
   import { AlertCircleIcon, GiftIcon } from "@hugeicons/core-free-icons";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import { gsap } from "gsap";
@@ -36,6 +36,12 @@
   const now = $derived(updatedAt ?? data.loadedAt);
   const storeCounts = $derived(getStoreCounts(data.items.giveaways));
   const visibleGiveaways = $derived(filterAndSortGiveaways(data.items.giveaways, filters));
+  const failedStores = $derived(new Set(data.items.errors.map((item) => item.store)));
+  const selectedStoreFailed = $derived(filters.store !== "all" && failedStores.has(filters.store));
+  const resultsUnavailable = $derived(
+    visibleGiveaways.length === 0 &&
+      (filters.store === "all" ? data.items.errors.length > 0 : selectedStoreFailed),
+  );
   const giveawayArtwork = $derived(
     data.items.giveaways.flatMap((giveaway) => {
       const image = getGiveawayImage(giveaway.images);
@@ -178,7 +184,11 @@
   {#if data.items.errors.length > 0}
     <Alert.Root>
       <HugeiconsIcon icon={AlertCircleIcon} />
-      <Alert.Title>Some stores could not be refreshed</Alert.Title>
+      <Alert.Title>
+        {data.items.errors.length === STORE_IDS.length
+          ? "Stores could not be refreshed"
+          : "Some stores could not be refreshed"}
+      </Alert.Title>
       <Alert.Description>
         <ul class="flex list-disc flex-col gap-1 pl-4">
           {#each data.items.errors as item (item.store)}
@@ -204,9 +214,19 @@
     <Empty.Root class="border border-dashed py-16">
       <Empty.Header>
         <Empty.Media variant="icon">
-          <HugeiconsIcon icon={GiftIcon} />
+          <HugeiconsIcon icon={resultsUnavailable ? AlertCircleIcon : GiftIcon} />
         </Empty.Media>
-        {#if filters.store === "all"}
+        {#if resultsUnavailable && filters.store === "all"}
+          <Empty.Title>Giveaways could not be confirmed</Empty.Title>
+          <Empty.Description>
+            No current giveaway data is available from the stores that failed to refresh. Try again shortly.
+          </Empty.Description>
+        {:else if resultsUnavailable && filters.store !== "all"}
+          <Empty.Title>{formatStore(filters.store)} giveaways could not be confirmed</Empty.Title>
+          <Empty.Description>
+            {formatStore(filters.store)} could not be refreshed and no cached giveaways are available. Try again shortly.
+          </Empty.Description>
+        {:else if filters.store === "all"}
           <Empty.Title>No giveaways available</Empty.Title>
           <Empty.Description>There are no active free-to-keep games right now. Check back soon.</Empty.Description>
         {:else}

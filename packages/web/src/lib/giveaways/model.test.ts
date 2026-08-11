@@ -1,5 +1,61 @@
 import { describe, expect, it } from "vitest";
-import { formatExpiry, formatStore, formatTimeLeft, getGiveawayImage } from "./model.ts";
+import {
+  formatExpiry,
+  formatStore,
+  formatTimeLeft,
+  getGiveawayImage,
+  isGiveawaysResponse,
+} from "./model.ts";
+
+const validResponse = {
+  count: 1,
+  giveaways: [
+    {
+      id: "game",
+      title: "Free Game",
+      description: "A free game",
+      url: "https://example.com/game",
+      images: {
+        wide: "https://example.com/wide.jpg",
+        tall: null,
+        thumbnail: null,
+      },
+      seller: "Publisher",
+      price: { original: 1999, formatted: "$19.99", currency: "USD" },
+      freeUntil: "2099-12-31T00:00:00.000Z",
+      store: "epic-games",
+    },
+  ],
+  errors: [{ store: "gog", error: "Refresh failed" }],
+};
+
+describe("isGiveawaysResponse", () => {
+  it("accepts a complete API response", () => {
+    expect(isGiveawaysResponse(validResponse)).toBe(true);
+  });
+
+  it("rejects invalid envelopes and nested giveaway fields", () => {
+    expect(isGiveawaysResponse({ ...validResponse, count: "1" })).toBe(false);
+    expect(
+      isGiveawaysResponse({
+        ...validResponse,
+        giveaways: [{ ...validResponse.giveaways[0], store: "unknown" }],
+      }),
+    ).toBe(false);
+    expect(
+      isGiveawaysResponse({
+        ...validResponse,
+        giveaways: [
+          {
+            ...validResponse.giveaways[0],
+            images: { ...validResponse.giveaways[0]?.images, wide: "not-a-url" },
+          },
+        ],
+      }),
+    ).toBe(false);
+    expect(isGiveawaysResponse({ ...validResponse, errors: [{ store: "gog" }] })).toBe(false);
+  });
+});
 
 describe("getGiveawayImage", () => {
   it("prefers landscape artwork", () => {

@@ -163,6 +163,50 @@ test("filters giveaways by store and keeps partial-store errors visible", async 
   await expect.element(screen.getByRole("radio", { name: "GOG, 0 giveaways", exact: true })).toBeInTheDocument();
 });
 
+test("shows a genuine empty state when every store responded successfully", async () => {
+  const items = {
+    count: 0,
+    giveaways: [],
+    errors: [],
+  } satisfies GiveawaysResponse;
+
+  const screen = await renderPage(items);
+
+  await expect.element(screen.getByText("No giveaways available", { exact: true })).toBeInTheDocument();
+  await expect.element(screen.getByText(/There are no active free-to-keep games right now/)).toBeInTheDocument();
+});
+
+test("does not report a genuine empty state when failed stores have no usable data", async () => {
+  const items = {
+    count: 0,
+    giveaways: [],
+    errors: [{ store: "gog", error: "Refresh failed" }],
+  } satisfies GiveawaysResponse;
+
+  const screen = await renderPage(items);
+
+  await expect.element(screen.getByText("Giveaways could not be confirmed", { exact: true })).toBeInTheDocument();
+  await expect.element(screen.getByText(/No current giveaway data is available/)).toBeInTheDocument();
+  await expect.element(screen.getByText("No giveaways available", { exact: true })).not.toBeInTheDocument();
+});
+
+test("does not report a failed selected store as empty", async () => {
+  const items = {
+    count: 1,
+    giveaways: [createGiveaway("epic", "Epic Giveaway", "epic-games")],
+    errors: [{ store: "gog", error: "Refresh failed" }],
+  } satisfies GiveawaysResponse;
+
+  const screen = await renderPage(items);
+  await screen.getByRole("radio", { name: "GOG" }).click();
+
+  await expect
+    .element(screen.getByText("GOG giveaways could not be confirmed", { exact: true }))
+    .toBeInTheDocument();
+  await expect.element(screen.getByText(/GOG could not be refreshed/)).toBeInTheDocument();
+  await expect.element(screen.getByText("No GOG giveaways available", { exact: true })).not.toBeInTheDocument();
+});
+
 test("shows a store-specific empty state", async () => {
   const items = {
     count: 1,
