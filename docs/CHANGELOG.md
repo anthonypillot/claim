@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/anthonypillot/claim/compare/v1.0.0...v1.0.1) (2026-08-11)
+
+
+### Performance Improvements
+
+* **web:** enhance brand and theme styling ([#49](https://github.com/anthonypillot/claim/issues/49)) ([e510121](https://github.com/anthonypillot/claim/commit/e5101218b083344beb7f329413880227c8e85cee))
+
 # 1.0.0 (2026-08-03)
 
 
