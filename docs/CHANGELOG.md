@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/anthonypillot/claim/compare/v1.0.2...v1.0.3) (2026-08-14)
+
+
+### Bug Fixes
+
+* **web:** prevent hero compositing artifacts ([7d5ce4c](https://github.com/anthonypillot/claim/commit/7d5ce4c22d3338a957dd5fbbf5615b57bc1b0f38))
+
 ## [1.0.2](https://github.com/anthonypillot/claim/compare/v1.0.1...v1.0.2) (2026-08-11)
 
 
