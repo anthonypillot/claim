@@ -42,6 +42,8 @@ The workspace development command starts both applications:
 
 The example environment already matches the Docker command. See the
 [API README](packages/api/README.md) for configuration, endpoints, and database details.
+OpenTelemetry is disabled locally unless an OTLP endpoint is configured; package READMEs document
+the API and SvelteKit server tracing setup.
 
 ## Verification
 

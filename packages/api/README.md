@@ -64,19 +64,41 @@ curl "http://localhost:3000/giveaways?locale=fr-FR&country=FR"
 
 ## Configuration
 
-| Variable         | Purpose                                                                                  |
-| ---------------- | ---------------------------------------------------------------------------------------- |
-| `DATABASE_URL`   | Postgres connection URL. Required by giveaway routes, `/ready`, and migration commands.  |
-| `PUBLIC_API_URL` | Public API origin advertised by OpenAPI. Required in production.                         |
-| `PORT`           | HTTP port. Defaults to `3000`.                                                           |
-| `LOG_LEVEL`      | Pino log level. Defaults to `debug` in development and `info` in production.             |
-| `NODE_ENV`       | Use `production` for production logging defaults; `bun run start` sets it automatically. |
+| Variable                      | Purpose                                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                | Postgres connection URL. Required by giveaway routes, `/ready`, and migration commands.  |
+| `PUBLIC_API_URL`              | Public API origin advertised by OpenAPI. Required in production.                         |
+| `PORT`                        | HTTP port. Defaults to `3000`.                                                           |
+| `LOG_LEVEL`                   | Pino log level. Defaults to `debug` in development and `info` in production.             |
+| `NODE_ENV`                    | Use `production` for production logging defaults; `bun run start` sets it automatically. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP collector base URL. Tracing is disabled when this is unset.                    |
+| `OTEL_RESOURCE_ATTRIBUTES`    | Comma-separated deployment resource attributes added by OpenTelemetry.                   |
+| `APP_VERSION`                 | Runtime service version. Falls back to package metadata when unset.                      |
 
 `PUBLIC_API_URL` must be an HTTP(S) origin without a path, query, or fragment. It defaults to the
 local API origin outside production. CORS is unrestricted because the API is public and read-only.
 
 `/health` and application construction do not need a database connection, which allows the
 container liveness probe to remain independent of Postgres.
+
+## Observability
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` to a SigNoz or OpenTelemetry Collector OTLP/HTTP endpoint, such as
+`http://signoz-k8s-infra-otel-agent.signoz:4318`, to enable tracing. The API exports protobuf traces
+to the endpoint's `/v1/traces` route. When the variable is absent, no telemetry SDK or exporter is
+started, so local development and tests do not attempt collector connections. Normal `SIGINT` and
+`SIGTERM` shutdown flushes buffered spans after the HTTP server stops.
+
+Spans identify the service as `claim-api`; `service.version` uses `APP_VERSION` and falls back to the
+package version. Add deployment environment and Kubernetes namespace values through
+`OTEL_RESOURCE_ATTRIBUTES`. Pino logs remain on stdout for container collection and include
+`trace_id`, `span_id`, and `trace_flags` while a sampled span is active. The SDK does not export
+logs.
+
+`/health` and `/ready` requests are omitted from routine traces and request completion logs. Failed
+readiness checks instead produce a dedicated failure span and correlated safe log. Other request
+logs contain only method, path, status, and duration; query strings, headers, and bodies are not
+logged.
 
 ## Database and cache
 

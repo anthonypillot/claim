@@ -1,3 +1,5 @@
+import { record } from "@elysia/opentelemetry";
+import { SpanStatusCode } from "@opentelemetry/api";
 import { and, eq, gt, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { Database } from "../../db/client.ts";
@@ -263,26 +265,43 @@ async function refreshScope(
     return { status: hasSnapshot ? "degraded" : "unavailable" };
   }
 
-  log.debug(scope, "store stale, fetching live");
-  let live: Giveaway[];
-  try {
-    live = await fetchFreeGames({ locale: scope.locale, country: scope.country });
-  } catch (error) {
-    await recordRefreshFailure(db, scope, leaseToken);
-    log.error({ ...scope, err: error }, "upstream fetch failed");
-    return {
-      status: (await hasSuccessfulSnapshot(db, scope)) ? "degraded" : "unavailable",
-    };
-  }
+  return record(
+    "giveaways.store.refresh",
+    { attributes: { "claim.store": scope.store } },
+    async (span): Promise<RefreshOutcome> => {
+      log.debug(scope, "store stale, fetching live");
+      let live: Giveaway[];
+      try {
+        live = await fetchFreeGames({ locale: scope.locale, country: scope.country });
+      } catch (error) {
+        await recordRefreshFailure(db, scope, leaseToken);
+        log.error({ ...scope, err: error }, "upstream fetch failed");
+        const status = (await hasSuccessfulSnapshot(db, scope)) ? "degraded" : "unavailable";
+        span.setAttributes({
+          "claim.cache.outcome": status,
+          "claim.refresh.outcome": "upstream_error",
+        });
+        span.setStatus({ code: SpanStatusCode.ERROR });
+        return { status };
+      }
 
-  const written = await replaceSnapshot({ db, scope, items: live, leaseToken });
-  if (written === null) {
-    return {
-      status: (await hasSuccessfulSnapshot(db, scope)) ? "degraded" : "unavailable",
-    };
-  }
-  log.info({ ...scope, count: written }, "cached live store giveaways");
-  return { status: "refreshed" };
+      const written = await replaceSnapshot({ db, scope, items: live, leaseToken });
+      if (written === null) {
+        const status = (await hasSuccessfulSnapshot(db, scope)) ? "degraded" : "unavailable";
+        span.setAttributes({
+          "claim.cache.outcome": status,
+          "claim.refresh.outcome": "lease_lost",
+        });
+        return { status };
+      }
+      log.info({ ...scope, count: written }, "cached live store giveaways");
+      span.setAttributes({
+        "claim.cache.outcome": "refreshed",
+        "claim.refresh.outcome": "succeeded",
+      });
+      return { status: "refreshed" };
+    },
+  );
 }
 
 function coordinateRefresh(
@@ -327,16 +346,29 @@ export function createGiveawayCacheScopeResolver(
     store: StoreId,
     market: Market,
   ): Promise<GiveawayCacheScopeResolution> {
-    const db = getDatabase();
-    const scope = { ...market, store };
-    const refresh = await coordinateRefresh(db, storeAdapters, scope);
-    if (refresh.status === "unavailable") {
-      return { availability: "unavailable", giveaways: [] };
-    }
+    return record(
+      "giveaways.cache.resolve",
+      { attributes: { "claim.store": store } },
+      async (span): Promise<GiveawayCacheScopeResolution> => {
+        const db = getDatabase();
+        const scope = { ...market, store };
+        const refresh = await coordinateRefresh(db, storeAdapters, scope);
+        if (refresh.status === "unavailable") {
+          span.setAttributes({
+            "claim.cache.availability": "unavailable",
+            "claim.cache.outcome": refresh.status,
+          });
+          return { availability: "unavailable", giveaways: [] };
+        }
 
-    return {
-      availability: refresh.status === "degraded" ? "degraded" : "available",
-      giveaways: await findActiveGiveaways(db, scope),
-    };
+        const availability = refresh.status === "degraded" ? "degraded" : "available";
+        const activeGiveaways = await findActiveGiveaways(db, scope);
+        span.setAttributes({
+          "claim.cache.availability": availability,
+          "claim.cache.outcome": refresh.status,
+        });
+        return { availability, giveaways: activeGiveaways };
+      },
+    );
   };
 }

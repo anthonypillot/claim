@@ -20,6 +20,7 @@ packages/api/
 │  ├─ index.ts                 entry point
 │  ├─ app.ts                   Elysia composition root
 │  ├─ config.ts                env access (requireDatabaseUrl)
+│  ├─ telemetry.ts             optional OpenTelemetry server instrumentation
 │  ├─ modules/                 one folder per FEATURE
 │  │  ├─ giveaways/
 │  │  │  ├─ index.ts
@@ -83,3 +84,16 @@ and migrations are generated into `./drizzle` (`drizzle.config.ts` sets `schema:
 persistence implementation and model in its feature module. Migrations are applied with the `drizzle-kit migrate` CLI
 (`db:migrate`), so there is no hand-written runtime migrator. `drizzle-kit` (SQL generation + migrate) and
 `@electric-sql/pglite` (test database) are dev-only and excluded from the production bundle, like `pino-pretty`.
+
+## Observability
+
+Production API and SvelteKit server processes export OpenTelemetry traces to the Kubernetes-local
+collector. The web server propagates W3C trace context on its server-side API request, so SigNoz can
+display the web load, API route, cache resolution, and any live Store refresh as one distributed
+trace. Telemetry initialization is conditional on `OTEL_EXPORTER_OTLP_ENDPOINT`; local development
+and tests remain collector-independent.
+
+Both services write Pino JSON to stdout rather than exporting logs through the SDK. The active trace
+and span identifiers are added to application logs, and the cluster collector parses those fields
+for trace-to-log correlation. Successful liveness and readiness probes are excluded from routine
+traces and request logs to keep operational telemetry focused on application traffic.

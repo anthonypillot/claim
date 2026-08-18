@@ -9,6 +9,8 @@ import { createLogger } from "./utils/logger.ts";
 
 const log = createLogger("http");
 const favicon = `data:image/svg+xml,${encodeURIComponent(faviconSvg)}`;
+const requestStartTimes = new WeakMap<Request, number>();
+const PROBE_PATHS = new Set(["/health", "/ready"]);
 
 const ApiMetadataResponseSchema = t.Object({
   name: t.String(),
@@ -30,6 +32,10 @@ export type AppDependencies = {
 // Capitalize the raw package name and suffix it, e.g. "claim" -> "Claim API".
 export function formatApiName(rawName: string): string {
   return rawName.charAt(0).toUpperCase() + rawName.slice(1) + " API";
+}
+
+export function shouldLogRequestCompletion(path: string): boolean {
+  return !PROBE_PATHS.has(path);
 }
 
 // Compose the Elysia application without binding a port, so it can be exercised via
@@ -63,9 +69,24 @@ export function buildApp(metadata: AppMetadata, dependencies: AppDependencies = 
         },
       }),
     )
-    .onAfterResponse(({ request, set }) => {
+    .onRequest(function rememberRequestStart({ request }) {
+      requestStartTimes.set(request, performance.now());
+    })
+    .onAfterResponse(function logRequestCompletion({ request, set }) {
+      const path = new URL(request.url).pathname;
+      const status = typeof set.status === "number" ? set.status : 200;
+      const startedAt = requestStartTimes.get(request);
+      requestStartTimes.delete(request);
+
+      if (!shouldLogRequestCompletion(path)) return;
+
       log.info(
-        { method: request.method, path: new URL(request.url).pathname, status: set.status },
+        {
+          method: request.method,
+          path,
+          status,
+          duration_ms: startedAt === undefined ? 0 : performance.now() - startedAt,
+        },
         "request completed",
       );
     })

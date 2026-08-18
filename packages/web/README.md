@@ -65,16 +65,18 @@ variants in `static/brand/`. Treat those files as generated outputs of
 
 ## Configuration And Deployment
 
-Production requires these runtime environment variables:
+Production runtime configuration uses these environment variables:
 
-| Variable                      | Purpose                                                 |
-| ----------------------------- | ------------------------------------------------------- |
-| `PUBLIC_API_URL`              | API origin used for requests and the OpenAPI link.      |
-| `PUBLIC_PLAUSIBLE_SCRIPT_URL` | Generated site-specific Plausible analytics script URL. |
-| `PUBLIC_WEB_URL`              | Web origin used to generate canonical page URLs.        |
-| `ORIGIN`                      | Public web origin used by the Node server.              |
-| `ROBOTS_ALLOW_INDEXING`       | Set to `true` only where search indexing is intended.   |
-| `PORT`                        | Listening port. Defaults to `3000`.                     |
+| Variable                      | Purpose                                                  |
+| ----------------------------- | -------------------------------------------------------- |
+| `PUBLIC_API_URL`              | API origin used for requests and the OpenAPI link.       |
+| `PUBLIC_PLAUSIBLE_SCRIPT_URL` | Generated site-specific Plausible analytics script URL.  |
+| `PUBLIC_WEB_URL`              | Web origin used to generate canonical page URLs.         |
+| `ORIGIN`                      | Public web origin used by the Node server.               |
+| `ROBOTS_ALLOW_INDEXING`       | Set to `true` only where search indexing is intended.    |
+| `PORT`                        | Listening port. Defaults to `3000`.                      |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Optional OTLP HTTP collector origin, normally on `4318`. |
+| `OTEL_RESOURCE_ATTRIBUTES`    | Optional comma-separated environment/resource labels.    |
 
 Set the API and web origins to `https://api.claim.anthonypillot.com` and
 `https://claim.anthonypillot.com`. Origins must not contain a path, query, or fragment. See
@@ -114,6 +116,25 @@ settings also provide an installation verification tool. If a Content Security P
 the Plausible origin in `script-src` and `connect-src`, and authorize the inline initialization snippet
 with a hash or nonce.
 
+### Server Telemetry
+
+SvelteKit's experimental server tracing and instrumentation support exports traces over OTLP
+HTTP/protobuf when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Use a collector origin such as
+`http://signoz-k8s-infra-otel-agent.signoz:4318`; the exporter sends traces to `/v1/traces`. If the
+variable is unset, the OpenTelemetry SDK is not started, so local development and tests do not try
+to contact a collector. There is no browser OpenTelemetry or RUM setup.
+
+Traces identify the service as `claim-web` and use the build's `APP_VERSION` as `service.version`.
+Set deployment and namespace labels through `OTEL_RESOURCE_ATTRIBUTES`, for example
+`deployment.environment.name=production,k8s.namespace.name=claim`. Server-side fetch is
+auto-instrumented and propagates W3C trace context to Claim API. Incoming `/health` HTTP spans,
+SvelteKit `/health` spans, and health request logs are excluded.
+
+Application logs are Pino JSON written to stdout for Kubernetes collection. Logs emitted inside an
+active span include `trace_id`, `span_id`, and `trace_flags`; OpenTelemetry log and metric exporters
+are disabled so the SDK exports traces only. Adapter-node's asynchronous shutdown event flushes
+buffered spans during normal `SIGINT` and `SIGTERM` termination.
+
 ### Robot Indexing
 
 Set `ROBOTS_ALLOW_INDEXING=true` only in production. Any other value, including an omitted variable,
@@ -147,6 +168,8 @@ docker run --rm --publish 3000:3000 \
   --env PUBLIC_WEB_URL=https://claim.anthonypillot.com \
   --env ORIGIN=https://claim.anthonypillot.com \
   --env ROBOTS_ALLOW_INDEXING=true \
+  --env OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4318 \
+  --env OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production,k8s.namespace.name=claim \
   claim-web
 ```
 

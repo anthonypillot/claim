@@ -1,7 +1,7 @@
 import { compileErrors, validate } from "@readme/openapi-parser";
 import { describe, expect, it } from "bun:test";
 
-import { buildApp, formatApiName } from "./app.ts";
+import { buildApp, formatApiName, shouldLogRequestCompletion } from "./app.ts";
 
 const ROOT_URL = "http://localhost/";
 const API_URL = "https://api.claim.anthonypillot.com";
@@ -41,6 +41,18 @@ describe("formatApiName", () => {
 
   it("leaves an already-capitalized name capitalized", () => {
     expect(formatApiName("Claim")).toBe("Claim API");
+  });
+});
+
+describe("shouldLogRequestCompletion", () => {
+  it("suppresses successful probes", () => {
+    expect(shouldLogRequestCompletion("/health")).toBe(false);
+    expect(shouldLogRequestCompletion("/ready")).toBe(false);
+  });
+
+  it("suppresses failed probes and keeps non-probe requests", () => {
+    expect(shouldLogRequestCompletion("/ready")).toBe(false);
+    expect(shouldLogRequestCompletion("/giveaways")).toBe(true);
   });
 });
 

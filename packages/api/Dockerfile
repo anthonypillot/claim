@@ -23,7 +23,9 @@ RUN bun run --cwd /app/packages/api build:production
 
 FROM oven/bun:1.3-distroless AS runtime
 
-ENV NODE_ENV=production
+ARG APP_VERSION
+ENV NODE_ENV=production \
+    APP_VERSION=${APP_VERSION}
 
 # The entrypoint runs from the API package while retaining the repository-level manifest at ../..
 # for runtime code that resolves package metadata relative to the working directory.
