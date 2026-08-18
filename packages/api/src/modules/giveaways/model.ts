@@ -109,11 +109,6 @@ export function createGiveawaysResponseSchema<const Store extends string>(store:
   });
 }
 
-export const EpicGamesGiveawaysResponseSchema = createGiveawaysResponseSchema("epic-games");
-export const PrimeGamingGiveawaysResponseSchema = createGiveawaysResponseSchema("prime-gaming");
-export const GogGiveawaysResponseSchema = createGiveawaysResponseSchema("gog");
-export const SteamGiveawaysResponseSchema = createGiveawaysResponseSchema("steam");
-
 /** Store ids the aggregate endpoint fans out to, in response order. */
 export const STORE_IDS = ["epic-games", "prime-gaming", "gog", "steam"] as const;
 export type StoreId = (typeof STORE_IDS)[number];

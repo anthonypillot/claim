@@ -5,6 +5,7 @@ import { giveawayFetches, giveaways } from "../../db/schema.ts";
 import { createTestDatabase } from "../../db/testing.ts";
 import { createGiveawayCacheScopeResolver, type StoreAdapters } from "./cache-scope.ts";
 import type { Giveaway, Market, StoreId } from "./model.ts";
+import { createGiveawayReads } from "./read.ts";
 
 const MARKET = { locale: "en-US", country: "US" } satisfies Market;
 
@@ -36,6 +37,22 @@ function createAdapters(fetchSteam: StoreAdapters["steam"]): StoreAdapters {
 
 function createResolver(adapters: StoreAdapters) {
   return createGiveawayCacheScopeResolver(() => db, adapters);
+}
+
+async function waitWithTimeout<Result>(
+  promise: Promise<Result>,
+  milliseconds: number,
+  message: string,
+): Promise<Result> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const rejection = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(message)), milliseconds);
+  });
+  try {
+    return await Promise.race([promise, rejection]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
 }
 
 async function ageSteamScope(): Promise<void> {
@@ -279,7 +296,7 @@ describe("Giveaway Cache Scope", () => {
     const secondResolver = createResolver(adapters);
 
     const first = firstResolver("steam", MARKET);
-    await started;
+    await waitWithTimeout(started, 1000, "Store adapter did not start");
     const second = secondResolver("steam", MARKET);
     releaseFetch?.();
 
@@ -287,6 +304,40 @@ describe("Giveaway Cache Scope", () => {
       "available",
       "available",
     ]);
+    expect(calls).toBe(1);
+  });
+
+  it("shares one refresh between concurrent aggregate and per-Store reads", async () => {
+    let calls = 0;
+    let releaseFetch: (() => void) | undefined;
+    let signalStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    const reads = createGiveawayReads(
+      createResolver(
+        createAdapters(async () => {
+          calls += 1;
+          signalStarted?.();
+          await gate;
+          return [giveaway()];
+        }),
+      ),
+    );
+
+    const aggregate = reads.getAll(MARKET);
+    await waitWithTimeout(started, 1000, "Store adapter did not start");
+    const store = reads.getStore("steam", MARKET);
+    releaseFetch?.();
+
+    const [aggregateResult, storeResult] = await Promise.all([aggregate, store]);
+    expect(aggregateResult.giveaways).toEqual([
+      expect.objectContaining({ store: "steam", id: "100100" }),
+    ]);
+    expect(storeResult.giveaways).toEqual([expect.objectContaining({ id: "100100" })]);
     expect(calls).toBe(1);
   });
 
@@ -315,13 +366,12 @@ describe("Giveaway Cache Scope", () => {
     );
 
     const owner = first("steam", MARKET);
-    await firstStarted;
-    const denied = await Promise.race([
+    await waitWithTimeout(firstStarted, 1000, "lease owner did not start");
+    const denied = await waitWithTimeout(
       second("steam", MARKET),
-      Bun.sleep(1000).then(() => {
-        throw new Error("lease denial unexpectedly waited");
-      }),
-    ]);
+      1000,
+      "lease denial unexpectedly waited",
+    );
 
     expect(denied).toEqual({ availability: "unavailable", giveaways: [] });
     expect(secondCalls).toBe(0);
