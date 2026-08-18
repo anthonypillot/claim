@@ -64,19 +64,27 @@ curl "http://localhost:3000/giveaways?locale=fr-FR&country=FR"
 
 ## Configuration
 
-| Variable         | Purpose                                                                                  |
-| ---------------- | ---------------------------------------------------------------------------------------- |
-| `DATABASE_URL`   | Postgres connection URL. Required by giveaway routes, `/ready`, and migration commands.  |
-| `PUBLIC_API_URL` | Public API origin advertised by OpenAPI. Required in production.                         |
-| `PORT`           | HTTP port. Defaults to `3000`.                                                           |
-| `LOG_LEVEL`      | Pino log level. Defaults to `debug` in development and `info` in production.             |
-| `NODE_ENV`       | Use `production` for production logging defaults; `bun run start` sets it automatically. |
+| Variable                      | Purpose                                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                | Postgres connection URL. Required by giveaway routes, `/ready`, and migration commands.  |
+| `PUBLIC_API_URL`              | Public API origin advertised by OpenAPI. Required in production.                         |
+| `PORT`                        | HTTP port. Defaults to `3000`.                                                           |
+| `LOG_LEVEL`                   | Pino log level. Defaults to `debug` in development and `info` in production.             |
+| `NODE_ENV`                    | Use `production` for production logging defaults; `bun run start` sets it automatically. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector base URL. Setting it enables OpenTelemetry server traces.                 |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | OTLP transport. Claim deployments use `http/protobuf`.                                   |
+| `OTEL_LOGS_EXPORTER`          | Set to `none`; Pino logs remain on stdout for cluster collection.                        |
+| `OTEL_METRICS_EXPORTER`       | Set to `none`; SigNoz derives APM metrics from traces.                                   |
+| `OTEL_RESOURCE_ATTRIBUTES`    | Comma-separated resource metadata such as namespace and deployment environment.          |
 
 `PUBLIC_API_URL` must be an HTTP(S) origin without a path, query, or fragment. It defaults to the
 local API origin outside production. CORS is unrestricted because the API is public and read-only.
 
 `/health` and application construction do not need a database connection, which allows the
 container liveness probe to remain independent of Postgres.
+
+When an OTLP endpoint is configured, the API reports Elysia server spans as the `claim-api` service.
+`/health` and `/ready` are excluded to keep Kubernetes probe traffic out of APM.
 
 ## Database and cache
 
