@@ -40,14 +40,14 @@ Focused tests (run from the package shown):
 
 - `src/index.ts` binds the server; `src/app.ts` is the IO-free Elysia composition root. Tests call
   `buildApp(...).handle(new Request(...))` rather than starting a server.
-- Features own routes, service logic, adapters, and tests under `src/modules/<feature>/`; do not
+- Features own routes, domain logic, adapters, and tests under `src/modules/<feature>/`; do not
   introduce cross-cutting controller/service/model directories.
 - `GET /health` is database-independent. `GET /ready` queries Postgres and returns 503 on failure.
 - `DATABASE_URL` is required only when database access occurs. Keep environment access lazy through
   `src/config.ts` so imports, `buildApp`, `/health`, and database-independent tests work without it.
 - TypeBox schemas in `modules/giveaways/model.ts` drive validation, OpenAPI, and static types.
-- Adding a store requires its adapter implementing `FetchFreeGames`, an ID in `STORE_IDS`, a fetcher
-  in `storeFetchers`, and a route. The `satisfies` registry check intentionally makes omissions fail
+- Adding a store requires its adapter implementing `FetchFreeGames`, an ID in `STORE_IDS`, an entry
+  in `storeAdapters`, and a route. The `satisfies` registry check intentionally makes omissions fail
   type checking.
 - The cache is scoped by `(store, locale, country)` for 24 hours. Successful refreshes replace the
   active snapshot transactionally; empty results are cached and failed stores remain stale.
@@ -59,7 +59,7 @@ Run Drizzle scripts from `packages/api`: `bun run db:generate` after schema chan
 migrations live in `drizzle/` and must accompany schema changes. `generate` needs no database;
 `migrate`, `push`, and `studio` require `DATABASE_URL`.
 
-API tests use `bun:test`. Route/repository suites use `createTestDatabase()`, which applies committed
+API tests use `bun:test`. Route/cache-scope suites use `createTestDatabase()`, which applies committed
 migrations to an in-memory PGlite database and returns `{ db, close }`; close it in `afterAll`.
 Outbound HTTP tests stub `globalThis.fetch` with co-located fixtures and restore it in `afterEach`.
 

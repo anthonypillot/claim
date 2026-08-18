@@ -23,10 +23,11 @@ packages/api/
 │  ├─ modules/                 one folder per FEATURE
 │  │  ├─ giveaways/
 │  │  │  ├─ index.ts
-│  │  │  ├─ service.ts
-│  │  │  ├─ model.ts            TypeBox API schema
-│  │  │  ├─ repository.ts       cache queries + row↔API mappers (over src/db/schema.ts)
+│  │  │  ├─ read.ts              aggregate/per-store response policy
+│  │  │  ├─ cache-scope.ts       deep read-through lifecycle + persistence implementation
+│  │  │  ├─ model.ts             TypeBox API schema
 │  │  │  └─ stores/
+│  │  │     ├─ index.ts          exhaustive Store adapter registry
 │  │  │     ├─ shared.ts
 │  │  │     ├─ epic-games/
 │  │  │     ├─ prime-gaming/
@@ -67,12 +68,18 @@ earliest giveaway expiry or after 24 hours, whichever comes first; empty snapsho
 Successful refreshes replace active snapshots transactionally, while failures preserve usable cached rows.
 In-process coordination and a token-guarded Postgres lease deduplicate concurrent refreshes.
 
+The Giveaway Cache Scope module owns that lifecycle end to end behind one resolver interface: freshness,
+coordination, Store retrieval, snapshot replacement, failure state, and active-Giveaway reads. The Giveaway read
+module consumes one resolution per Store and owns aggregate fan-out, sorting, degraded-Store reporting, and
+per-Store response policy. Store retrieval remains the real adapter seam; PGlite exercises the concrete Drizzle
+implementation in tests without a separate persistence interface.
+
 See [`giveaways-flow.md`](./giveaways-flow.md) for the complete cache decision table and failure behavior.
 
 `src/db/` holds shared persistence infrastructure: connection/test plumbing and centralized Drizzle table
 definitions. Following Drizzle's default layout, table definitions live in `src/db/schema.ts`
 and migrations are generated into `./drizzle` (`drizzle.config.ts` sets `schema: "./src/db/schema.ts"`,
 `out: "./drizzle"`); a new feature (e.g. `subscriptions/`) adds its table to `src/db/schema.ts` while keeping its
-own `repository.ts` + `model.ts` in its module. Migrations are applied with the `drizzle-kit migrate` CLI
+persistence implementation and model in its feature module. Migrations are applied with the `drizzle-kit migrate` CLI
 (`db:migrate`), so there is no hand-written runtime migrator. `drizzle-kit` (SQL generation + migrate) and
 `@electric-sql/pglite` (test database) are dev-only and excluded from the production bundle, like `pino-pretty`.
