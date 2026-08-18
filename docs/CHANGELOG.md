@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/anthonypillot/claim/compare/v1.0.3...v1.0.4) (2026-08-18)
+
+
+### Performance Improvements
+
+* **api:** deepen giveaway cache architecture ([da9674d](https://github.com/anthonypillot/claim/commit/da9674da82911be50dc77ec252650c14397fcc58))
+
 ## [1.0.3](https://github.com/anthonypillot/claim/compare/v1.0.2...v1.0.3) (2026-08-14)
 
 
