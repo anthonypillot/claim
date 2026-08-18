@@ -28,8 +28,11 @@ report.[0-9]*.json
 .cache
 *.tsbuildinfo
 
+# local agent tooling
+.agents/
+
 # IntelliJ based IDEs
 .idea
 
-# Finder (MacOS) folder config
+# finder (macOS) folder config
 .DS_Store
