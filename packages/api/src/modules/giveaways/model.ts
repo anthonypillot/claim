@@ -118,15 +118,6 @@ export const SteamGiveawaysResponseSchema = createGiveawaysResponseSchema("steam
 export const STORE_IDS = ["epic-games", "prime-gaming", "gog", "steam"] as const;
 export type StoreId = (typeof STORE_IDS)[number];
 
-/** How long a cached market/store stays fresh before a read re-fetches it from upstream. */
-export const CACHE_TTL_HOURS = 24;
-
-/** Failed refreshes pause briefly before another request retries the same upstream. */
-export const REFRESH_FAILURE_COOLDOWN_MINUTES = 5;
-
-/** Cross-replica refresh ownership expires after this many seconds if its worker disappears. */
-export const REFRESH_LEASE_SECONDS = 60;
-
 /** A giveaway tagged with its source store; only the aggregate endpoint adds the tag. */
 export const StoreGiveawaySchema = t.Composite([
   GiveawaySchema,

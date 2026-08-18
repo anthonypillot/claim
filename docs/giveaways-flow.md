@@ -3,9 +3,9 @@
 `GET /giveaways*` uses a request-driven read-through cache in Postgres. There is no scheduled job or
 manual refresh endpoint: the first request for stale data refreshes it from the relevant store.
 
-## Cache scope
+## Giveaway Cache Scope
 
-Each `(store, locale, country)` combination has its own cache. For example, Epic Games for `en-US` and
+Each Giveaway Cache Scope is one `(store, locale, country)` combination. For example, Epic Games for `en-US` and
 `US` is independent from Epic Games for `fr-FR` and `FR`, and from every other store.
 
 The aggregate `GET /giveaways` endpoint checks all store scopes for the requested market. A per-store
@@ -20,7 +20,7 @@ endpoint such as `GET /giveaways/epic-games` checks only that store.
 | Snapshot reaches the 24-hour maximum TTL | The next request refreshes that store | Yes |
 | Last successful result was empty | Serve empty for up to 24 hours | No |
 | Refresh fails | Preserve usable cached giveaways and wait five minutes before retrying | One failed attempt |
-| Several requests arrive together | They share the same refresh work | One per cache scope |
+| Several requests arrive together | They share the same refresh work | One per Giveaway Cache Scope |
 
 A non-empty snapshot is fresh until the earlier of:
 

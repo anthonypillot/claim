@@ -1,7 +1,7 @@
-import type { Giveaway } from "../model.ts";
+import type { Giveaway, Market } from "../model.ts";
 
 /** Contract every store implements: currently-free base games, normalized. */
-export type FetchFreeGames = (options: { locale: string; country: string }) => Promise<Giveaway[]>;
+export type FetchFreeGames = (market: Market) => Promise<Giveaway[]>;
 
 export const MAX_UPSTREAM_RESPONSE_BYTES = 5 * 1024 * 1024;
 
