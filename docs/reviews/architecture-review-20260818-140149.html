@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="alternate" hreflang="fr" href="architecture-review-20260818-140149.fr.html" />
+    <title>Architecture review - Claim</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: "base",
+        securityLevel: "loose",
+        themeVariables: {
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          primaryColor: "#f8fafc",
+          primaryTextColor: "#0f172a",
+          primaryBorderColor: "#94a3b8",
+          lineColor: "#64748b",
+          tertiaryColor: "#ecfdf5",
+        },
+      });
+    </script>
+    <style>
+      :root { color-scheme: light; }
+      html { scroll-behavior: smooth; }
+      body {
+        background:
+          radial-gradient(circle at 8% 0%, rgba(16, 185, 129, 0.08), transparent 24rem),
+          #f5f5f4;
+      }
+      .paper { box-shadow: 0 22px 70px rgba(15, 23, 42, 0.08); }
+      .deep {
+        background: linear-gradient(145deg, #0f172a, #1e293b);
+        color: white;
+        border-color: #0f172a;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      }
+      .seam { border-style: dashed; }
+      .leak { color: #dc2626; }
+      .diagram-grid {
+        background-image:
+          linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+        background-size: 20px 20px;
+      }
+      .arrow { color: #64748b; font-weight: 700; }
+      .arrow-red { color: #dc2626; font-weight: 700; }
+      code { overflow-wrap: anywhere; }
+      @media print {
+        body { background: white; }
+        article { break-inside: avoid; }
+      }
+    </style>
+  </head>
+  <body class="font-sans text-slate-900 antialiased">
+    <main class="mx-auto max-w-6xl space-y-12 px-5 py-10 sm:px-8 lg:py-16">
+      <header class="paper overflow-hidden rounded-3xl border border-slate-200 bg-white">
+        <div class="grid gap-8 p-7 sm:p-10 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Claim / 18 Aug 2026</p>
+            <h1 class="mt-3 font-serif text-4xl leading-tight tracking-tight sm:text-5xl">Architecture review</h1>
+            <p class="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
+              Scoped from recent change hot spots: Giveaway cache-scope refresh and web Giveaway intake, filter state,
+              and rendering. No <code>CONTEXT.md</code> or <code>docs/adr/</code> was found; domain terms come from
+              <code>docs/architecture.md</code> and <code>docs/giveaways-flow.md</code>.
+            </p>
+          </div>
+          <div class="grid grid-cols-2 gap-x-6 gap-y-3 text-xs text-slate-600">
+            <div class="flex items-center gap-2"><span class="h-5 w-8 rounded border border-slate-400 bg-white"></span> module</div>
+            <div class="flex items-center gap-2"><span class="h-5 w-8 rounded border-2 border-slate-900 bg-slate-800"></span> deep</div>
+            <div class="flex items-center gap-2"><span class="h-5 w-8 rounded border border-dashed border-slate-500"></span> seam</div>
+            <div class="flex items-center gap-2"><span class="text-lg font-bold text-red-600">&#8594;</span> leakage</div>
+          </div>
+        </div>
+        <div class="border-t border-slate-200 bg-slate-50 px-7 py-4 text-xs text-slate-600 sm:px-10">
+          Scope signal: commits <code>4ccb88a</code>, <code>60736de</code>, and <code>b922fee</code> repeatedly changed these paths.
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-12">
+        <article id="cache-scope-lifecycle" class="paper rounded-3xl border border-slate-200 bg-white p-6 sm:p-9">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">Candidate 01</p>
+              <h2 class="mt-2 font-serif text-3xl tracking-tight">Deepen the cache-scope lifecycle</h2>
+            </div>
+            <div class="flex gap-2">
+              <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">Strong</span>
+              <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">local-substitutable</span>
+            </div>
+          </div>
+
+          <div class="mt-6 rounded-xl bg-slate-950 px-4 py-3 font-mono text-xs leading-5 text-slate-200">
+            packages/api/src/modules/giveaways/service.ts:42-103, 114-172<br />
+            packages/api/src/modules/giveaways/repository.ts:186-298<br />
+            packages/api/src/db/schema.ts:63-86<br />
+            packages/api/src/modules/giveaways/{repository,index}.test.ts
+          </div>
+
+          <div class="mt-7 grid gap-5 lg:grid-cols-2">
+            <figure class="diagram-grid rounded-2xl border border-slate-200 p-5">
+              <figcaption class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Before / shallow choreography</figcaption>
+              <div class="mt-5 flex min-h-72 items-center justify-center gap-3">
+                <div class="w-28 rounded-lg border border-slate-400 bg-white p-3 text-center text-xs font-semibold">refresh<br />orchestration</div>
+                <div class="flex flex-col items-center gap-1 text-[10px] text-red-700">
+                  <span>&#8594; fresh?</span><span>&#8592; bool</span><span>&#8594; lease?</span><span>&#8592; token</span>
+                  <span>&#8594; snapshot?</span><span>&#8594; cooldown?</span><span>&#8594; failure</span>
+                </div>
+                <div class="w-32 space-y-2">
+                  <div class="rounded border border-slate-400 bg-white px-2 py-1 text-center text-[10px]">isFresh</div>
+                  <div class="rounded border border-slate-400 bg-white px-2 py-1 text-center text-[10px]">acquireLease</div>
+                  <div class="rounded border border-slate-400 bg-white px-2 py-1 text-center text-[10px]">hasSnapshot</div>
+                  <div class="rounded border border-slate-400 bg-white px-2 py-1 text-center text-[10px]">inCooldown</div>
+                  <div class="rounded border border-slate-400 bg-white px-2 py-1 text-center text-[10px]">recordFailure</div>
+                </div>
+              </div>
+            </figure>
+
+            <figure class="diagram-grid rounded-2xl border border-slate-200 p-5">
+              <figcaption class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">After / deep ownership</figcaption>
+              <div class="mt-5 flex min-h-72 items-center justify-center gap-4">
+                <div class="w-28 rounded-lg border border-slate-400 bg-white p-3 text-center text-xs font-semibold">Giveaway<br />orchestration</div>
+                <span class="arrow">&#8594;</span>
+                <div class="deep w-64 rounded-2xl border-4 p-5">
+                  <p class="text-center text-xs font-bold uppercase tracking-[0.18em]">cache-scope lifecycle</p>
+                  <div class="mt-5 grid grid-cols-2 gap-2 text-center text-[10px] text-slate-300">
+                    <span class="rounded bg-white/10 p-2">freshness</span><span class="rounded bg-white/10 p-2">lease</span>
+                    <span class="rounded bg-white/10 p-2">cooldown</span><span class="rounded bg-white/10 p-2">snapshot</span>
+                    <span class="col-span-2 rounded bg-white/10 p-2">success / failure transition</span>
+                  </div>
+                </div>
+              </div>
+            </figure>
+          </div>
+
+          <div class="mt-7 grid gap-5 lg:grid-cols-3">
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Problem</h3><p class="mt-2 text-sm leading-6">One cache-scope transition leaks across many low-level calls; understanding degraded and unavailable outcomes requires bouncing between modules.</p></div>
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Solution</h3><p class="mt-2 text-sm leading-6">Let one Giveaway module implementation own freshness, lease, cooldown, snapshot, replacement, and failure transitions. Choose its smaller interface only during exploration.</p></div>
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Deletion test</h3><p class="mt-2 text-sm leading-6">Deleting <code>isInFailureCooldown</code> from this path changes logging, not behavior; deleting lifecycle checks breaks correctness. Concentrate the latter, remove the former choreography.</p></div>
+          </div>
+
+          <div class="mt-6 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
+            <span class="rounded-full bg-emerald-50 px-3 py-2">locality: invariants in one module</span>
+            <span class="rounded-full bg-emerald-50 px-3 py-2">leverage: one transition, every scope</span>
+            <span class="rounded-full bg-emerald-50 px-3 py-2">interface becomes the test surface</span>
+            <span class="rounded-full bg-emerald-50 px-3 py-2">depth hides persistence mechanics</span>
+          </div>
+          <p class="mt-5 border-l-2 border-slate-300 pl-4 text-xs leading-5 text-slate-600">
+            <strong>Seam and adapter check:</strong> Drizzle and PGlite exercise one persistence implementation, so this is a hypothetical seam, not a reason to add another adapter. The deep module earns value through locality and leverage. No architecture decision conflict.
+          </p>
+        </article>
+
+        <article id="store-seam" class="paper rounded-3xl border border-slate-200 bg-white p-6 sm:p-9">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-indigo-700">Candidate 02</p>
+              <h2 class="mt-2 font-serif text-3xl tracking-tight">Use the real Store seam as the test surface</h2>
+            </div>
+            <div class="flex gap-2">
+              <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">Strong</span>
+              <span class="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800">ports &amp; adapters</span>
+            </div>
+          </div>
+
+          <div class="mt-6 rounded-xl bg-slate-950 px-4 py-3 font-mono text-xs leading-5 text-slate-200">
+            packages/api/src/modules/giveaways/stores/shared.ts:3-4<br />
+            packages/api/src/modules/giveaways/service.ts:16-31, 42-80<br />
+            packages/api/src/modules/giveaways/index.ts:22-26<br />
+            packages/api/src/modules/giveaways/index.test.ts:38-77, 185-235, 364-524
+          </div>
+
+          <div class="mt-7 grid gap-5 lg:grid-cols-2">
+            <figure class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <figcaption class="px-1 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Before / real seam bypassed</figcaption>
+              <pre class="mermaid mt-4">
+flowchart TB
+  T[Route tests] -->|patch| G[global fetch switchboard]
+  G --> E[Epic adapter]
+  G --> P[Prime adapter]
+  G --> O[GOG adapter]
+  G --> S[Steam adapter]
+  E --> L[cache lifecycle]
+  P --> L
+  O --> L
+  S --> L
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#991b1b;
+  class T,G leak;
+              </pre>
+            </figure>
+            <figure class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <figcaption class="px-1 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">After / adapters compose at the seam</figcaption>
+              <pre class="mermaid mt-4">
+flowchart TB
+  R[Giveaway module] --> I{{FetchFreeGames interface}}
+  I --> E[Epic adapter]
+  I --> P[Prime adapter]
+  I --> O[GOG adapter]
+  I --> S[Steam adapter]
+  X[Lifecycle tests] -. same seam .-> F[deterministic Store adapters]
+  F --> I
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#fff,stroke-width:3px;
+  class R deep;
+              </pre>
+            </figure>
+          </div>
+
+          <div class="mt-7 grid gap-5 lg:grid-cols-3">
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Problem</h3><p class="mt-2 text-sm leading-6">Four adapters prove a real seam, yet lifecycle tests patch global networking and know every Store request sequence.</p></div>
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Solution</h3><p class="mt-2 text-sm leading-6">Deepen Giveaway composition around the existing Store interface so production and deterministic test adapters enter through the same seam. Do not add a new interface.</p></div>
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Deletion test</h3><p class="mt-2 text-sm leading-6">Removing an upstream request can break broad route tests even when lifecycle behavior is unchanged; the existing interface survives deletion as the valuable test surface.</p></div>
+          </div>
+
+          <div class="mt-6 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
+            <span class="rounded-full bg-indigo-50 px-3 py-2">locality: network detail stays in adapters</span>
+            <span class="rounded-full bg-indigo-50 px-3 py-2">leverage: one seam, four implementations</span>
+            <span class="rounded-full bg-indigo-50 px-3 py-2">tests select exact Store outcomes</span>
+            <span class="rounded-full bg-indigo-50 px-3 py-2">depth keeps normalized Giveaways inside</span>
+          </div>
+          <p class="mt-5 border-l-2 border-slate-300 pl-4 text-xs leading-5 text-slate-600">
+            <strong>Module check:</strong> Epic, Prime, GOG, and Steam are four adapters, so the seam is real. The current implementation is shallow at composition because tests cannot use that interface. The change remains inside the Giveaway module and does not conflict with documented feature ownership.
+          </p>
+        </article>
+
+        <article id="filter-state" class="paper rounded-3xl border border-slate-200 bg-white p-6 sm:p-9">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-amber-700">Candidate 03</p>
+              <h2 class="mt-2 font-serif text-3xl tracking-tight">Deepen URL-backed Giveaway filter state</h2>
+            </div>
+            <div class="flex gap-2">
+              <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">local-substitutable</span>
+            </div>
+          </div>
+
+          <div class="mt-6 rounded-xl bg-slate-950 px-4 py-3 font-mono text-xs leading-5 text-slate-200">
+            packages/web/src/lib/giveaways/filters.ts:13-33<br />
+            packages/web/src/routes/+page.svelte:27-30, 107-140<br />
+            packages/web/src/routes/_page-test-wrapper.svelte:6-12<br />
+            packages/web/src/{lib/giveaways/filters,routes/page.svelte}.test.ts
+          </div>
+
+          <div class="mt-7 grid gap-5 lg:grid-cols-2">
+            <figure class="diagram-grid rounded-2xl border border-slate-200 p-5">
+              <figcaption class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Before / invocation leaks</figcaption>
+              <div class="relative mx-auto mt-7 h-64 max-w-sm">
+                <div class="absolute left-1/2 top-0 -translate-x-1/2 rounded-lg border border-slate-400 bg-white px-5 py-3 text-xs font-semibold">page.url</div>
+                <div class="absolute bottom-2 left-0 rounded-lg border border-slate-400 bg-white px-5 py-3 text-xs font-semibold">local filters</div>
+                <div class="absolute bottom-2 right-0 rounded-lg border border-red-500 bg-red-50 px-4 py-3 text-xs font-semibold text-red-800">test no-op adapter</div>
+                <svg viewBox="0 0 360 250" class="absolute inset-0 h-full w-full" aria-hidden="true">
+                  <defs><marker id="r" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#dc2626" /></marker></defs>
+                  <path d="M180 45 L90 188" stroke="#64748b" stroke-width="2" fill="none" />
+                  <path d="M105 205 L255 205" stroke="#dc2626" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#r)" fill="none" />
+                  <path d="M270 185 L190 47" stroke="#dc2626" stroke-width="3" stroke-dasharray="7 6" fill="none" />
+                </svg>
+                <p class="absolute left-1/2 top-28 -translate-x-1/2 rounded bg-white/90 px-2 text-center text-[10px] font-semibold text-red-700">visible state can pass<br />while URL behavior vanishes</p>
+              </div>
+            </figure>
+            <figure class="diagram-grid rounded-2xl border border-slate-200 p-5">
+              <figcaption class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">After / one deep state owner</figcaption>
+              <div class="mt-6 flex min-h-64 flex-col items-center justify-center gap-4">
+                <div class="flex gap-8 text-xs font-semibold"><span>interaction &#8595;</span><span>history &#8595;</span></div>
+                <div class="deep w-full max-w-sm rounded-2xl border-4 px-6 py-8 text-center">
+                  <p class="text-xs font-bold uppercase tracking-[0.18em]">URL-backed Giveaway filters</p>
+                  <p class="mt-3 text-[11px] text-slate-300">parse / transition / serialize / synchronize</p>
+                </div>
+                <div class="text-xs font-semibold">&#8595; renderer reads one state</div>
+              </div>
+            </figure>
+          </div>
+
+          <div class="mt-7 grid gap-5 lg:grid-cols-3">
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Problem</h3><p class="mt-2 text-sm leading-6">Pure helpers are tested, but their route invocation is shallow: local state still works when shareable URL behavior is deleted.</p></div>
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Solution</h3><p class="mt-2 text-sm leading-6">Let one web Giveaway module implementation own parsing, transition, serialization, and history synchronization. Explore its interface later through user-visible behavior.</p></div>
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Deletion test</h3><p class="mt-2 text-sm leading-6">Deleting the URL update at <code>+page.svelte:131</code> leaves filtering intact; current rendering and helper tests can still pass.</p></div>
+          </div>
+
+          <div class="mt-6 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
+            <span class="rounded-full bg-amber-50 px-3 py-2">locality: URL semantics stay together</span>
+            <span class="rounded-full bg-amber-50 px-3 py-2">leverage: one transition, three effects</span>
+            <span class="rounded-full bg-amber-50 px-3 py-2">interface is visible user behavior</span>
+            <span class="rounded-full bg-amber-50 px-3 py-2">depth absorbs synchronization</span>
+          </div>
+          <p class="mt-5 border-l-2 border-slate-300 pl-4 text-xs leading-5 text-slate-600">
+            <strong>Seam and adapter check:</strong> production URL pushing and the test no-op are two adapters, but the seam leaks because the test adapter removes the behavior under test. Deepening the module should remove that shallow escape hatch, not add adapters. No architecture decision conflict.
+          </p>
+        </article>
+
+        <article id="store-declaration" class="paper rounded-3xl border border-slate-200 bg-white p-6 sm:p-9">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-amber-700">Candidate 04</p>
+              <h2 class="mt-2 font-serif text-3xl tracking-tight">Concentrate Store declaration locality</h2>
+            </div>
+            <div class="flex gap-2">
+              <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Worth exploring</span>
+              <span class="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800">ports &amp; adapters</span>
+            </div>
+          </div>
+
+          <div class="mt-6 rounded-xl bg-slate-950 px-4 py-3 font-mono text-xs leading-5 text-slate-200">
+            packages/api/src/modules/giveaways/model.ts:103-119<br />
+            packages/api/src/modules/giveaways/service.ts:25-31<br />
+            packages/api/src/modules/giveaways/index.ts:7-18, 60-115<br />
+            packages/api/src/modules/giveaways/index.test.ts:527-709
+          </div>
+
+          <div class="mt-7 grid gap-5 lg:grid-cols-2">
+            <figure class="diagram-grid rounded-2xl border border-slate-200 p-5">
+              <figcaption class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Before / names repeat sideways</figcaption>
+              <div class="mt-6 grid min-h-64 grid-cols-3 gap-3 text-center text-[10px]">
+                <div><p class="mb-3 font-bold uppercase tracking-wider">model</p><div class="space-y-2"><p class="rounded border bg-white p-2">Epic</p><p class="rounded border bg-white p-2">Prime</p><p class="rounded border bg-white p-2">GOG</p><p class="rounded border bg-white p-2">Steam</p></div></div>
+                <div><p class="mb-3 font-bold uppercase tracking-wider">orchestration</p><div class="space-y-2"><p class="rounded border bg-white p-2">Epic</p><p class="rounded border bg-white p-2">Prime</p><p class="rounded border bg-white p-2">GOG</p><p class="rounded border bg-white p-2">Steam</p></div></div>
+                <div><p class="mb-3 font-bold uppercase tracking-wider">routes</p><div class="space-y-2"><p class="rounded border bg-white p-2">Epic</p><p class="rounded border bg-white p-2">Prime</p><p class="rounded border bg-white p-2">GOG</p><p class="rounded border bg-white p-2">Steam</p></div></div>
+              </div>
+            </figure>
+            <figure class="diagram-grid rounded-2xl border border-slate-200 p-5">
+              <figcaption class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">After / one authoritative catalog</figcaption>
+              <div class="mt-6 flex min-h-64 items-center justify-center gap-4">
+                <div class="deep space-y-2 rounded-2xl border-4 p-5 text-center text-[10px]"><p class="mb-3 font-bold uppercase tracking-wider">Store declarations</p><p class="rounded bg-white/10 p-2">Epic</p><p class="rounded bg-white/10 p-2">Prime</p><p class="rounded bg-white/10 p-2">GOG</p><p class="rounded bg-white/10 p-2">Steam</p></div>
+                <div class="space-y-8 text-xl text-slate-500"><p>&#8594;</p><p>&#8594;</p><p>&#8594;</p></div>
+                <div class="space-y-4 text-center text-[10px]"><p class="rounded border bg-white p-3">response schema</p><p class="rounded border bg-white p-3">Store fan-out</p><p class="rounded border bg-white p-3">route registration</p></div>
+              </div>
+            </figure>
+          </div>
+
+          <div class="mt-7 grid gap-5 lg:grid-cols-3">
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Problem</h3><p class="mt-2 text-sm leading-6">Store identity repeats across model, orchestration, route registration, and tests; only adapter registration has completeness leverage.</p></div>
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Solution</h3><p class="mt-2 text-sm leading-6">Deepen one Giveaway module around an authoritative Store declaration while keeping each Store implementation local. Decide the interface only after checking framework typing constraints.</p></div>
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Deletion test</h3><p class="mt-2 text-sm leading-6">Deleting one route block can typecheck while the Store remains in aggregate fan-out; deleting one adapter registration already fails type checking.</p></div>
+          </div>
+
+          <div class="mt-6 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
+            <span class="rounded-full bg-amber-50 px-3 py-2">locality: one Store declaration</span>
+            <span class="rounded-full bg-amber-50 px-3 py-2">leverage: completeness across consumers</span>
+            <span class="rounded-full bg-amber-50 px-3 py-2">interface shrinks repeated knowledge</span>
+            <span class="rounded-full bg-amber-50 px-3 py-2">depth absorbs registration mechanics</span>
+          </div>
+          <p class="mt-5 border-l-2 border-slate-300 pl-4 text-xs leading-5 text-slate-600">
+            <strong>Seam and adapter check:</strong> four Store adapters make this a real seam; repeated route blocks are shallow registrations, not adapters. Keep the catalog in the Giveaway module to preserve documented feature ownership. No architecture decision conflict.
+          </p>
+        </article>
+
+        <article id="time-owner" class="paper rounded-3xl border border-slate-200 bg-white p-6 sm:p-9">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">Candidate 05</p>
+              <h2 class="mt-2 font-serif text-3xl tracking-tight">Give free-window time one owner per refresh</h2>
+            </div>
+            <div class="flex gap-2">
+              <span class="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-800">Speculative</span>
+              <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">in-process</span>
+            </div>
+          </div>
+
+          <div class="mt-6 rounded-xl bg-slate-950 px-4 py-3 font-mono text-xs leading-5 text-slate-200">
+            packages/api/src/modules/giveaways/stores/*/mapper.ts<br />
+            packages/api/src/modules/giveaways/repository.ts:110-118, 171-297<br />
+            packages/api/src/modules/giveaways/repository.test.ts:39-49, 134-149<br />
+            packages/api/src/modules/giveaways/index.test.ts:79-115, 326-347
+          </div>
+
+          <div class="mt-7 grid gap-5 lg:grid-cols-2">
+            <figure class="diagram-grid rounded-2xl border border-slate-200 p-5">
+              <figcaption class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Before / three clocks</figcaption>
+              <div class="mt-6 flex min-h-64 items-center justify-around gap-3 text-center">
+                <div><div class="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-4 border-red-300 bg-white text-3xl">&#128339;</div><p class="mt-3 text-[10px] font-bold uppercase">Store mapper</p></div>
+                <div><div class="mx-auto flex h-24 w-24 items-center justify-center rounded-full border-4 border-amber-300 bg-white text-4xl">&#128340;</div><p class="mt-3 text-[10px] font-bold uppercase">refresh deadline</p></div>
+                <div><div class="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-4 border-indigo-300 bg-white text-3xl">&#128341;</div><p class="mt-3 text-[10px] font-bold uppercase">database now()</p></div>
+              </div>
+            </figure>
+            <figure class="diagram-grid rounded-2xl border border-slate-200 p-5">
+              <figcaption class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">After / intentional operation timeline</figcaption>
+              <div class="mt-6 flex min-h-64 flex-col justify-center">
+                <div class="relative h-2 rounded-full bg-slate-300"><span class="absolute -top-2 left-0 h-6 w-6 rounded-full bg-emerald-600"></span><span class="absolute -top-2 left-1/2 h-6 w-6 -translate-x-1/2 rounded-full bg-emerald-600"></span><span class="absolute -top-2 right-0 h-6 w-6 rounded-full bg-indigo-600"></span></div>
+                <div class="mt-5 grid grid-cols-3 text-center text-[10px] font-bold uppercase"><p>refresh time</p><p>free-window decisions</p><p>database-authoritative lease</p></div>
+                <div class="deep mx-auto mt-10 w-4/5 rounded-2xl border-4 p-5 text-center text-xs font-bold uppercase tracking-wider">one refresh operation</div>
+              </div>
+            </figure>
+          </div>
+
+          <div class="mt-7 grid gap-5 lg:grid-cols-3">
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Problem</h3><p class="mt-2 text-sm leading-6">Store mapping, refresh deadlines, and persistence consult separate clocks; exact free-window equality differs across adapters.</p></div>
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Solution</h3><p class="mt-2 text-sm leading-6">Deepen refresh-time ownership inside the Giveaway module while leaving lease authority in persistence. Do not design a general clock interface without stronger evidence.</p></div>
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Deletion test</h3><p class="mt-2 text-sm leading-6">Changing Prime Gaming from inclusive to exclusive free-window comparison is not covered; current distant-future fixtures hide the semantic difference.</p></div>
+          </div>
+
+          <div class="mt-6 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
+            <span class="rounded-full bg-slate-100 px-3 py-2">locality: one refresh timeline</span>
+            <span class="rounded-full bg-slate-100 px-3 py-2">leverage: deterministic rollover tests</span>
+            <span class="rounded-full bg-slate-100 px-3 py-2">interface deferred until evidence</span>
+            <span class="rounded-full bg-slate-100 px-3 py-2">depth owns ambient time</span>
+          </div>
+          <p class="mt-5 border-l-2 border-slate-300 pl-4 text-xs leading-5 text-slate-600">
+            <strong>Seam and adapter check:</strong> time has no explicit seam or adapters today; process time and database time are implementation choices, not two adapters. This remains speculative to avoid inventing a shallow interface. No architecture decision conflict.
+          </p>
+        </article>
+      </section>
+
+      <section class="paper rounded-3xl border border-slate-200 bg-white p-6 sm:p-9">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">YAGNI / investigated and rejected</p>
+        <div class="mt-6 grid gap-5 md:grid-cols-2">
+          <div class="rounded-2xl border border-slate-200 p-5"><h3 class="font-serif text-xl">Do not collapse every Store folder</h3><p class="mt-2 text-sm leading-6 text-slate-600">Their retrieval and mapping implementations have locality, and four adapters make the Store seam real. Deleting small index files saves little navigational mass.</p></div>
+          <div class="rounded-2xl border border-slate-200 p-5"><h3 class="font-serif text-xl">Do not generate a shared response model yet</h3><p class="mt-2 text-sm leading-6 text-slate-600">The web intake adapter already hides transport and validation behind a useful interface. Cross-workspace generation adds coupling for one response family.</p></div>
+          <div class="rounded-2xl border border-slate-200 p-5"><h3 class="font-serif text-xl">Do not extract degraded rendering helpers</h3><p class="mt-2 text-sm leading-6 text-slate-600">One renderer has direct coverage. A new pure module would be shallow and could repeat the filter invocation gap.</p></div>
+          <div class="rounded-2xl border border-slate-200 p-5"><h3 class="font-serif text-xl">Do not generalize Store network readers</h3><p class="mt-2 text-sm leading-6 text-slate-600">Session bootstrap, GraphQL, cookies, and discovery flows differ. Existing bounded readers provide the shared depth with better locality.</p></div>
+        </div>
+      </section>
+
+      <section id="top-recommendation" class="deep paper rounded-3xl border-4 p-7 sm:p-10">
+        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300">Top recommendation</p>
+        <a href="#cache-scope-lifecycle" class="mt-3 block font-serif text-3xl tracking-tight underline decoration-emerald-400 decoration-2 underline-offset-8 sm:text-4xl">Deepen the cache-scope lifecycle</a>
+        <p class="mt-5 max-w-3xl text-sm leading-6 text-slate-300">It sits in the hottest change path, owns the most correctness-sensitive state, and offers the strongest locality and leverage gain without adding a speculative adapter or crossing documented feature ownership.</p>
+      </section>
+    </main>
+  </body>
+</html>
