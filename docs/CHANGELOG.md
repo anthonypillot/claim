@@ -1,3 +1,10 @@
+## [1.0.5](https://github.com/anthonypillot/claim/compare/v1.0.4...v1.0.5) (2026-08-18)
+
+
+### Performance Improvements
+
+* **api:** consolidate giveaway route composition ([875bdc6](https://github.com/anthonypillot/claim/commit/875bdc6c112124381e71628d8b1816f8f99b05db))
+
 ## [1.0.4](https://github.com/anthonypillot/claim/compare/v1.0.3...v1.0.4) (2026-08-18)
 
 

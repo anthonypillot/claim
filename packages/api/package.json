@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "API of the Claim application, built with Elysia.",
   "license": "GPL-3.0-or-later",
   "author": {
