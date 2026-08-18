@@ -1,18 +1,15 @@
 import { Elysia } from "elysia";
 
-import type { Database } from "../../db/client.ts";
 import { getDb } from "../../db/client.ts";
 import { createLogger } from "../../utils/logger.ts";
 import { createGiveawayCacheScopeResolver } from "./cache-scope.ts";
 import {
   AllGiveawaysResponseSchema,
-  EpicGamesGiveawaysResponseSchema,
+  createGiveawaysResponseSchema,
   ErrorResponseSchema,
   GiveawaysQuerySchema,
-  GogGiveawaysResponseSchema,
-  PrimeGamingGiveawaysResponseSchema,
   resolveMarket,
-  SteamGiveawaysResponseSchema,
+  type StoreId,
   UnsupportedMarketError,
 } from "./model.ts";
 import { createGiveawayReads, type GiveawayReads } from "./read.ts";
@@ -20,6 +17,32 @@ import { storeAdapters } from "./stores/index.ts";
 import { UpstreamError } from "./stores/shared.ts";
 
 const log = createLogger("giveaways routes");
+
+type StoreGiveawaysRoute<Store extends StoreId> = {
+  store: Store;
+  path: `/${Store}`;
+  summary: string;
+};
+
+function createStoreGiveawaysRoute<const Store extends StoreId>(
+  reads: GiveawayReads,
+  route: StoreGiveawaysRoute<Store>,
+) {
+  return new Elysia().get(
+    route.path,
+    ({ query }) => reads.getStore(route.store, resolveMarket(query)),
+    {
+      query: GiveawaysQuerySchema,
+      response: {
+        200: createGiveawaysResponseSchema(route.store),
+        422: ErrorResponseSchema,
+        500: ErrorResponseSchema,
+        502: ErrorResponseSchema,
+      },
+      detail: { summary: route.summary, tags: ["giveaways"] },
+    },
+  );
+}
 
 /**
  * The giveaways plugin. Its read module is replaceable so route tests exercise the same seam as callers.
@@ -60,51 +83,36 @@ export function createGiveaways(reads: GiveawayReads = createDefaultGiveawayRead
       detail: { summary: "List currently-free giveaways across all stores", tags: ["giveaways"] },
     })
 
-    .get("/epic-games", ({ query }) => reads.getStore("epic-games", resolveMarket(query)), {
-      query: GiveawaysQuerySchema,
-      response: {
-        200: EpicGamesGiveawaysResponseSchema,
-        422: ErrorResponseSchema,
-        500: ErrorResponseSchema,
-        502: ErrorResponseSchema,
-      },
-      detail: { summary: "List currently-free Epic Games giveaways", tags: ["giveaways"] },
-    })
-
-    .get("/prime-gaming", ({ query }) => reads.getStore("prime-gaming", resolveMarket(query)), {
-      query: GiveawaysQuerySchema,
-      response: {
-        200: PrimeGamingGiveawaysResponseSchema,
-        422: ErrorResponseSchema,
-        500: ErrorResponseSchema,
-        502: ErrorResponseSchema,
-      },
-      detail: { summary: "List currently-free Prime Gaming full games", tags: ["giveaways"] },
-    })
-
-    .get("/gog", ({ query }) => reads.getStore("gog", resolveMarket(query)), {
-      query: GiveawaysQuerySchema,
-      response: {
-        200: GogGiveawaysResponseSchema,
-        422: ErrorResponseSchema,
-        500: ErrorResponseSchema,
-        502: ErrorResponseSchema,
-      },
-      detail: { summary: "List currently-free GOG giveaways", tags: ["giveaways"] },
-    })
-
-    .get("/steam", ({ query }) => reads.getStore("steam", resolveMarket(query)), {
-      query: GiveawaysQuerySchema,
-      response: {
-        200: SteamGiveawaysResponseSchema,
-        422: ErrorResponseSchema,
-        500: ErrorResponseSchema,
-        502: ErrorResponseSchema,
-      },
-      detail: { summary: "List currently-free Steam giveaways", tags: ["giveaways"] },
-    });
+    .use(
+      createStoreGiveawaysRoute(reads, {
+        store: "epic-games",
+        path: "/epic-games",
+        summary: "List currently-free Epic Games giveaways",
+      }),
+    )
+    .use(
+      createStoreGiveawaysRoute(reads, {
+        store: "prime-gaming",
+        path: "/prime-gaming",
+        summary: "List currently-free Prime Gaming full games",
+      }),
+    )
+    .use(
+      createStoreGiveawaysRoute(reads, {
+        store: "gog",
+        path: "/gog",
+        summary: "List currently-free GOG giveaways",
+      }),
+    )
+    .use(
+      createStoreGiveawaysRoute(reads, {
+        store: "steam",
+        path: "/steam",
+        summary: "List currently-free Steam giveaways",
+      }),
+    );
 }
 
-export function createDefaultGiveawayReads(getDatabase: () => Database = getDb): GiveawayReads {
-  return createGiveawayReads(createGiveawayCacheScopeResolver(getDatabase, storeAdapters));
+function createDefaultGiveawayReads(): GiveawayReads {
+  return createGiveawayReads(createGiveawayCacheScopeResolver(getDb, storeAdapters));
 }

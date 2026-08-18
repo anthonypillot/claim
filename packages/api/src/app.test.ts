@@ -17,11 +17,15 @@ type OpenApiOperation = {
     {
       content?: {
         "application/json"?: {
-          schema?: unknown;
+          schema?: OpenApiSchema;
         };
       };
     }
   >;
+};
+
+type OpenApiSchema = {
+  properties?: { store?: { const?: string } };
 };
 
 type OpenApiDocument = {
@@ -122,16 +126,21 @@ describe("health probes", () => {
     expect(spec.paths?.["/giveaways/"]).toBeUndefined();
 
     const expectedResponses = ["200", "422", "500", "502"];
-    for (const path of [
-      "/giveaways",
-      "/giveaways/epic-games",
-      "/giveaways/prime-gaming",
-      "/giveaways/gog",
-      "/giveaways/steam",
-    ]) {
+    const storeByPath = {
+      "/giveaways/epic-games": "epic-games",
+      "/giveaways/prime-gaming": "prime-gaming",
+      "/giveaways/gog": "gog",
+      "/giveaways/steam": "steam",
+    } satisfies Record<string, string>;
+    for (const path of ["/giveaways", ...Object.keys(storeByPath)]) {
       expect(Object.keys(spec.paths?.[path]?.get?.responses ?? {}).toSorted()).toEqual(
         expectedResponses,
       );
+    }
+    for (const [path, store] of Object.entries(storeByPath)) {
+      const schema =
+        spec.paths?.[path]?.get?.responses?.["200"]?.content?.["application/json"]?.schema;
+      expect(schema?.properties?.store?.const).toBe(store);
     }
 
     const aggregateSchema =

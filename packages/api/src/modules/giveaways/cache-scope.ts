@@ -300,15 +300,22 @@ function coordinateRefresh(
     refreshes = new Map();
     refreshesByAdapter.set(adapters, refreshes);
   }
+  const activeRefreshes = refreshes;
 
   const key = scopeKey(scope);
-  const existing = refreshes.get(key);
+  const existing = activeRefreshes.get(key);
   if (existing) return existing;
 
-  const refresh = refreshScope(db, scope, adapters[scope.store]).finally(() => {
-    if (refreshes.get(key) === refresh) refreshes.delete(key);
-  });
-  refreshes.set(key, refresh);
+  async function runRefresh(): Promise<RefreshOutcome> {
+    try {
+      return await refreshScope(db, scope, adapters[scope.store]);
+    } finally {
+      if (activeRefreshes.get(key) === refresh) activeRefreshes.delete(key);
+    }
+  }
+
+  const refresh = runRefresh();
+  activeRefreshes.set(key, refresh);
   return refresh;
 }
 
