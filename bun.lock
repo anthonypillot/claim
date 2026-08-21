@@ -17,7 +17,7 @@
     },
     "packages/api": {
       "name": "api",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "@elysia/opentelemetry": "^1.4.12",
         "@elysiajs/cors": "^1.4.2",
@@ -37,7 +37,7 @@
     },
     "packages/web": {
       "name": "web",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "gsap": "^3.15.0",
         "mode-watcher": "^1.1.0",

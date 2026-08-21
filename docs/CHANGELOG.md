@@ -1,3 +1,10 @@
+## [1.0.6](https://github.com/anthonypillot/claim/compare/v1.0.5...v1.0.6) (2026-08-21)
+
+
+### Performance Improvements
+
+* **api:** export server traces to SigNoz ([caf9167](https://github.com/anthonypillot/claim/commit/caf91675450eaf33d174a0232793b4ad1e29bdf7))
+
 ## [1.0.5](https://github.com/anthonypillot/claim/compare/v1.0.4...v1.0.5) (2026-08-18)
 
 
