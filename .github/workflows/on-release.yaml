@@ -87,6 +87,8 @@ jobs:
 
   deploy:
     name: 🚀 Deploy
+    # Temporarily pause Kubernetes deployments while retaining the workflow configuration.
+    if: ${{ false }}
     needs: [build, images]
     uses: ./.github/workflows/deploy.yaml
     with:

@@ -39,6 +39,8 @@ permissions:
 jobs:
   validate:
     name: 🔎 Validate ${{ inputs.tag }}
+    # Temporarily pause manual and reusable Kubernetes deployments.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.release.outputs.image-tag }}
