@@ -3,8 +3,9 @@
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import { mode, setMode } from "mode-watcher";
   import { Switch } from "$lib/components/ui/switch";
+  import { m } from "$lib/paraglide/messages";
 
-  let label = $derived(mode.current === "dark" ? "Switch to light mode" : "Switch to dark mode");
+  let label = $derived(mode.current === "dark" ? m.theme_light() : m.theme_dark());
 </script>
 
 <div class="text-foreground flex items-center gap-2">

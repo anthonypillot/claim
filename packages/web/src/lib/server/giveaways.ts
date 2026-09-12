@@ -1,16 +1,20 @@
 import { getApiUrl } from "$lib/config";
 import { isGiveawaysResponse, type GiveawaysResponse } from "$lib/giveaways/model";
+import { LOCALE_MARKETS } from "$lib/i18n/locale";
+import type { Locale } from "$lib/paraglide/runtime";
 import { error } from "@sveltejs/kit";
 
 export const GIVEAWAYS_REQUEST_TIMEOUT_MS = 30_000;
 
 export async function fetchGiveaways(
   fetch: typeof globalThis.fetch,
+  locale: Locale,
   timeoutMs = GIVEAWAYS_REQUEST_TIMEOUT_MS,
 ): Promise<GiveawaysResponse> {
   let response: Response;
   try {
-    response = await fetch(getApiUrl("/giveaways"), {
+    const query = new URLSearchParams(LOCALE_MARKETS[locale]);
+    response = await fetch(getApiUrl(`/giveaways?${query}`), {
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (cause) {

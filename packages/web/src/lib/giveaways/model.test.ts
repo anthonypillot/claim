@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatExpiry,
+  formatPrice,
   formatStore,
   formatTimeLeft,
   getGiveawayImage,
@@ -86,7 +87,11 @@ describe("formatExpiry", () => {
   });
 
   it("handles invalid timestamps", () => {
-    expect(formatExpiry("not-a-date")).toBe("Unknown");
+    expect(formatExpiry("not-a-date")).toBeNull();
+  });
+
+  it("formats French dates and times in UTC", () => {
+    expect(formatExpiry("2026-08-01T12:00:00.000Z", "fr")).toBe("1 août 2026 à 12:00");
   });
 });
 
@@ -112,5 +117,33 @@ describe("formatTimeLeft", () => {
     expect(formatTimeLeft("2026-07-27T12:00:00.000Z", now)).toBe("Ended");
     expect(formatTimeLeft("2026-07-26T12:00:00.000Z", now)).toBe("Ended");
     expect(formatTimeLeft("not-a-date", now)).toBe("End time unknown");
+  });
+
+  it("uses French countdown units and translated terminal states", () => {
+    expect(formatTimeLeft("2026-08-01T12:00:00.000Z", now, "fr")).toBe("5 jours restants");
+    expect(formatTimeLeft("2026-07-28T12:00:00.000Z", now, "fr")).toBe("1 jour restant");
+    expect(formatTimeLeft("2026-07-27T14:00:00.000Z", now, "fr")).toBe("2 heures restantes");
+    expect(formatTimeLeft("2026-07-27T13:00:00.000Z", now, "fr")).toBe("1 heure restante");
+    expect(formatTimeLeft("2026-07-27T12:02:00.000Z", now, "fr")).toBe("2 minutes restantes");
+    expect(formatTimeLeft("2026-07-27T12:00:01.000Z", now, "fr")).toBe("1 minute restante");
+    expect(formatTimeLeft("2026-07-27T12:00:00.000Z", now, "fr")).toBe("Terminé");
+    expect(formatTimeLeft("not-a-date", now, "fr")).toBe("Heure de fin inconnue");
+  });
+});
+
+describe("formatPrice", () => {
+  it("formats the original minor-unit price in the selected locale", () => {
+    const price = { original: 1999, formatted: "€19.99", currency: "EUR" };
+    expect(formatPrice(price, "fr")).toBe("19,99\u00a0€");
+    expect(formatPrice({ ...price, currency: "USD" }, "en")).toBe("$19.99");
+  });
+
+  it("respects currency fraction digits and falls back for an invalid currency", () => {
+    expect(formatPrice({ original: 1999, formatted: "¥1999", currency: "JPY" }, "en")).toBe(
+      "¥1,999",
+    );
+    expect(formatPrice({ original: 1999, formatted: "19.99 coins", currency: "coins" }, "fr")).toBe(
+      "19.99 coins",
+    );
   });
 });

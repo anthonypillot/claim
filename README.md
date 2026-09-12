@@ -10,9 +10,13 @@ Steam. The repository contains the public JSON API and a SvelteKit site that con
 | [`packages/api`](packages/api/README.md) | Bun and Elysia JSON API |
 | [`packages/web`](packages/web/README.md) | Svelte web application  |
 
+Workspaces are the direct children of `packages/` (`packages/*`), keeping generated package
+metadata inside the web source tree out of workspace discovery.
+
 ## Prerequisites
 
 - Bun 1.3 (CI and images automatically use the latest patch release)
+- Node.js 24 for the web production server and end-to-end tests
 - PostgreSQL, or Docker for the PostgreSQL 18 development database shown below
 
 ## Local Development

@@ -8,7 +8,7 @@
     "url": "https://anthonypillot.com"
   },
   "workspaces": [
-    "packages/**"
+    "packages/*"
   ],
   "type": "module",
   "scripts": {

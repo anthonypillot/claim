@@ -1,0 +1,110 @@
+{
+  "page_title": "Jeux offerts | Claim",
+  "page_description": "Découvrez les jeux à récupérer gratuitement et à conserver sur les principales boutiques.",
+  "hero_tagline": "Gratuits à récupérer, à garder pour toujours",
+  "hero_title": "Des jeux à ne pas manquer",
+  "hero_description": "Les jeux offerts en ce moment sur Epic Games, Prime Gaming, GOG et Steam, réunis au même endroit.",
+  "home_label": "Accueil de Claim",
+  "language_label": "Langue",
+  "footer_credit": "Claim, créé par",
+  "footer_navigation": "Navigation de pied de page",
+  "footer_version": "Version {version} de Claim",
+  "theme_light": "Passer au thème clair",
+  "theme_dark": "Passer au thème sombre",
+  "filters_title": "Filtrer et trier les jeux offerts",
+  "filters_store": "Filtrer par boutique",
+  "filters_all": "Toutes les boutiques",
+  "filters_store_count": "{store}, {count}",
+  "filters_sort": "Trier par date de fin",
+  "filters_ending_soon": "Se terminent bientôt",
+  "giveaway_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local formattedCount = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{formattedCount} jeu offert",
+        "countPlural=*": "{formattedCount} jeux offerts"
+      }
+    }
+  ],
+  "refresh_all_failed": "Impossible d’actualiser les boutiques",
+  "refresh_some_failed": "Impossible d’actualiser certaines boutiques",
+  "refresh_failed": "Impossible d’actualiser les jeux offerts. Réessayez dans quelques instants.",
+  "giveaways_title": "Jeux offerts disponibles",
+  "unavailable_title": "Impossible de confirmer les jeux offerts",
+  "unavailable_description": "Aucune donnée actuelle n’est disponible pour les boutiques dont l’actualisation a échoué. Réessayez dans quelques instants.",
+  "unavailable_store_title": "Impossible de confirmer les jeux offerts sur {store}",
+  "unavailable_store_description": "Impossible d’actualiser {store} et aucun jeu offert n’est disponible en cache. Réessayez dans quelques instants.",
+  "empty_title": "Aucun jeu offert disponible",
+  "empty_description": "Il n’y a aucun jeu à récupérer gratuitement en ce moment. Revenez bientôt.",
+  "empty_store_title": "Aucun jeu offert sur {store}",
+  "empty_store_description": "Il n’y a aucun jeu à récupérer gratuitement sur {store} en ce moment. Essayez une autre boutique ou revenez bientôt.",
+  "artwork_label": "Illustration de {title}",
+  "artwork_unavailable": "Illustration indisponible",
+  "store_label": "Boutique : {store}",
+  "publisher_label": "Éditeur",
+  "publisher_unknown": "Inconnu",
+  "price_label": "Prix d’origine",
+  "expiry_label": "Offert jusqu’au",
+  "expiry_datetime": "{date} à {time}",
+  "expiry_accessible": "{remaining} ; fin le {date} UTC",
+  "expiry_tooltip": "Se termine le {date} UTC",
+  "expiry_unknown": "Date de fin inconnue",
+  "time_unknown": "Heure de fin inconnue",
+  "time_ended": "Terminé",
+  "time_minutes": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local formattedCount = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{formattedCount} minute restante",
+        "countPlural=*": "{formattedCount} minutes restantes"
+      }
+    }
+  ],
+  "time_hours": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local formattedCount = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{formattedCount} heure restante",
+        "countPlural=*": "{formattedCount} heures restantes"
+      }
+    }
+  ],
+  "time_days": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local formattedCount = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{formattedCount} jour restant",
+        "countPlural=*": "{formattedCount} jours restants"
+      }
+    }
+  ],
+  "giveaway_action": "Voir l’offre",
+  "giveaway_unavailable": "Lien vers la boutique indisponible",
+  "error_not_found_title": "Page introuvable",
+  "error_not_found_description": "La page que vous recherchez n’existe pas ou a été déplacée.",
+  "error_title": "Une erreur est survenue",
+  "error_description": "Claim n’a pas pu charger cette page. Veuillez réessayer.",
+  "error_status": "Erreur {status}",
+  "error_retry": "Réessayer",
+  "error_home": "Retour à l’accueil"
+}
