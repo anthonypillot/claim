@@ -20,7 +20,7 @@
     >
       <BrandLogo kind="mark" alt="" class="size-8" />
     </a>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 md:gap-4">
       <Button href={apiUrl} target="_blank" rel="noreferrer">
         API
         <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />

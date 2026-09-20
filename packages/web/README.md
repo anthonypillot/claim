@@ -80,7 +80,9 @@ document. The HTML `lang` attribute, metadata, accessibility labels, interface, 
 therefore use the selected language from the first render. Hydration reads the server-selected
 document language, and concurrent server requests have isolated locale state. Locale-dependent
 HTML and SvelteKit data responses use `Content-Language`, `Vary: Cookie, Accept-Language`, and
-`Cache-Control: private, no-cache`.
+`Cache-Control: private, no-cache`. Internal links use full-document navigation so a language change
+in another tab is applied to both the interface and API market on the next visit. Filter changes
+remain shallow URL updates without reloading the document.
 
 The web language selects a fixed API market:
 

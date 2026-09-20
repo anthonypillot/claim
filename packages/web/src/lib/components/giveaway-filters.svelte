@@ -39,7 +39,7 @@
 
 <section aria-labelledby="giveaway-filters-title" class="min-w-0">
   <h2 id="giveaway-filters-title" class="sr-only">{m.filters_title()}</h2>
-  <div class="grid grid-cols-2 gap-2 lg:flex lg:items-center lg:gap-4">
+  <div class="grid grid-cols-2 gap-2 lg:flex lg:flex-wrap lg:items-center lg:gap-4">
     <ToggleGroup.Root
       type="single"
       variant="outline"

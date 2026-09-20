@@ -88,10 +88,39 @@ test("keeps French controls accessible on mobile and translates theme changes", 
   await expect(page.getByRole("radio", { name: "Français", exact: true })).toBeInViewport();
   await page.getByRole("switch", { name: "Passer au thème sombre" }).click();
   await expect(page.getByRole("switch", { name: "Passer au thème clair" })).toBeChecked();
+  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute(
+    "href",
+    "/favicon-white.svg",
+  );
   await expect(page.getByRole("navigation", { name: "Navigation de pied de page" })).toBeAttached();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
+});
+
+test("fits the French filter toolbar at the desktop breakpoint", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Trier par date de fin" }).scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+});
+
+test("uses the language selected in another tab when returning home", async ({ page, context }) => {
+  await page.goto("/missing-page");
+  await expect(page).toHaveTitle("Page introuvable | Claim");
+
+  const otherTab = await context.newPage();
+  await otherTab.goto("/");
+  await otherTab.getByRole("radio", { name: "English", exact: true }).click();
+  await expect(otherTab).toHaveTitle("Giveaways | Claim");
+
+  await page.getByRole("link", { name: "Retour à l’accueil" }).click();
+  await expect(page).toHaveTitle("Giveaways | Claim");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("radio", { name: "English", exact: true })).toBeChecked();
+  await expect(page.getByText("Discover this game in English (US).")).toBeVisible();
 });
 
 test("retains the server language when navigator preferences differ during hydration", async ({
