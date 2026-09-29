@@ -7,6 +7,10 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
+/src/lib/paraglide
+/i18n/project.inlang/cache
+/playwright-report
+/test-results
 
 # OS
 .DS_Store

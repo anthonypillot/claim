@@ -19,6 +19,7 @@
   import { formatStore, getGiveawayImage, STORE_IDS } from "$lib/giveaways/model";
   import { AlertCircleIcon, GiftIcon } from "@hugeicons/core-free-icons";
   import { HugeiconsIcon } from "@hugeicons/svelte";
+  import { m } from "$lib/paraglide/messages";
   import { gsap } from "gsap";
   import { ScrollTrigger } from "gsap/ScrollTrigger";
   import { onMount, tick } from "svelte";
@@ -141,8 +142,8 @@
 </script>
 
 <svelte:head>
-  <title>Giveaways | Claim</title>
-  <meta name="description" content="Discover free-to-keep games available now across major storefronts." />
+  <title>{m.page_title()}</title>
+  <meta name="description" content={m.page_description()} />
 </svelte:head>
 
 <main class="mx-auto flex w-full max-w-7xl flex-col gap-10 px-5 py-10 sm:px-8 lg:py-14">
@@ -164,10 +165,12 @@
       class="flex min-h-96 max-w-2xl flex-col items-start justify-center gap-3 px-6 py-12 sm:px-10"
     >
       <BrandLogo kind="lockup" alt="Claim" class="mb-3 h-auto w-64 sm:w-80" />
-      <p class="text-brand-orange text-sm font-medium tracking-widest uppercase">Free to claim, free to keep</p>
-      <h1 id="page-title" class="font-heading text-4xl font-bold tracking-tight sm:text-5xl">Games worth claiming</h1>
+      <p lang="en" class="text-brand-orange text-sm font-medium tracking-widest uppercase">
+        Free to claim, free to keep
+      </p>
+      <h1 id="page-title" class="font-heading text-4xl font-bold tracking-tight sm:text-5xl">{m.hero_title()}</h1>
       <p class="text-muted-foreground text-lg">
-        Current giveaways from Epic Games, Prime Gaming, GOG, and Steam, gathered in one place.
+        {m.hero_description()}
       </p>
     </div>
   </section>
@@ -185,13 +188,13 @@
       <HugeiconsIcon icon={AlertCircleIcon} />
       <Alert.Title>
         {data.items.errors.length === STORE_IDS.length
-          ? "Stores could not be refreshed"
-          : "Some stores could not be refreshed"}
+          ? m.refresh_all_failed()
+          : m.refresh_some_failed()}
       </Alert.Title>
       <Alert.Description>
         <ul class="flex list-disc flex-col gap-1 pl-4">
           {#each data.items.errors as item (item.store)}
-            <li><strong>{formatStore(item.store)}:</strong> {item.error}</li>
+            <li><strong>{formatStore(item.store)}:</strong> {m.refresh_failed()}</li>
           {/each}
         </ul>
       </Alert.Description>
@@ -200,7 +203,7 @@
 
   {#if visibleGiveaways.length > 0}
     <section aria-labelledby="giveaway-list-title">
-      <h2 id="giveaway-list-title" class="sr-only">Available giveaways</h2>
+      <h2 id="giveaway-list-title" class="sr-only">{m.giveaways_title()}</h2>
       <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
         {#each visibleGiveaways as giveaway (`${giveaway.store}:${giveaway.id}`)}
           <ScrollReveal enabled={heroReady}>
@@ -216,23 +219,22 @@
           <HugeiconsIcon icon={resultsUnavailable ? AlertCircleIcon : GiftIcon} />
         </Empty.Media>
         {#if resultsUnavailable && filters.store === "all"}
-          <Empty.Title>Giveaways could not be confirmed</Empty.Title>
+          <Empty.Title>{m.unavailable_title()}</Empty.Title>
           <Empty.Description>
-            No current giveaway data is available from the stores that failed to refresh. Try again shortly.
+            {m.unavailable_description()}
           </Empty.Description>
         {:else if resultsUnavailable && filters.store !== "all"}
-          <Empty.Title>{formatStore(filters.store)} giveaways could not be confirmed</Empty.Title>
+          <Empty.Title>{m.unavailable_store_title({ store: formatStore(filters.store) })}</Empty.Title>
           <Empty.Description>
-            {formatStore(filters.store)} could not be refreshed and no cached giveaways are available. Try again shortly.
+            {m.unavailable_store_description({ store: formatStore(filters.store) })}
           </Empty.Description>
         {:else if filters.store === "all"}
-          <Empty.Title>No giveaways available</Empty.Title>
-          <Empty.Description>There are no active free-to-keep games right now. Check back soon.</Empty.Description>
+          <Empty.Title>{m.empty_title()}</Empty.Title>
+          <Empty.Description>{m.empty_description()}</Empty.Description>
         {:else}
-          <Empty.Title>No {formatStore(filters.store)} giveaways available</Empty.Title>
+          <Empty.Title>{m.empty_store_title({ store: formatStore(filters.store) })}</Empty.Title>
           <Empty.Description>
-            There are no active free-to-keep games from {formatStore(filters.store)} right now. Try another store or check
-            back soon.
+            {m.empty_store_description({ store: formatStore(filters.store) })}
           </Empty.Description>
         {/if}
       </Empty.Header>

@@ -2,7 +2,7 @@
 
 ## Repository
 
-Claim is a Bun workspace monorepo (`packages/**`) for free-game giveaways:
+Claim is a Bun workspace monorepo (`packages/*`) for free-game giveaways:
 
 - `packages/api`: Bun + Elysia + TypeBox JSON API; Postgres cache via Drizzle ORM.
 - `packages/web`: SvelteKit 2 + Svelte 5 site; Tailwind CSS 4 and shadcn-svelte.
@@ -71,6 +71,9 @@ database-independent. Apply migrations from source before deployment.
 
 ## Web
 
+- Workspace discovery stays at `packages/*`: recursive globs pick up Paraglide's generated package
+  metadata. For localization behavior and generation commands, read the Localization section in
+  `packages/web/README.md`; edit `i18n/` catalogs and the shared `paraglide.config.ts`.
 - Svelte runes mode is forced for project files and `adapter-node` is configured inside
   `packages/web/vite.config.ts`; there is no separate `svelte.config.*`.
 - During development, browser and SSR requests under `/api/*` are rewritten to

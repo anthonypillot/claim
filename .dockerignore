@@ -9,6 +9,10 @@ dist
 .svelte-kit
 *.tgz
 
+packages/web/src/lib/paraglide
+packages/web/i18n/project.inlang/cache
+packages/web/i18n/project.inlang/.lix
+
 # coverage and logs
 coverage
 playwright-report

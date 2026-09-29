@@ -7,12 +7,16 @@ show the remaining time in adaptive day, hour, or minute units. Toolbar state is
 the optional `store` and `sort=ending-soon` query parameters; default filters are omitted from the
 URL.
 
+The interface is available in English and French. The header language control saves the reader's
+choice and reloads the current URL, preserving the selected store, sorting, and fragment.
+
 ## Stack
 
 - SvelteKit 2 and Svelte 5 with runes mode forced for project files
 - Tailwind CSS 4
 - shadcn-svelte with the Rhea style, Taupe base color, and Hugeicons
-- Vitest with Node and Playwright browser projects
+- Paraglide JS with generated, typed English and French messages
+- Vitest with Node and Playwright browser projects, plus Playwright end-to-end tests
 
 ## Development
 
@@ -37,10 +41,12 @@ Run package commands from `packages/web`:
 bun run dev
 bun run check
 bun run test
+bun run test:e2e
 bun run build
 bun run start
 bun run preview
 bun run brand:export
+bun run i18n:compile
 ```
 
 Run a focused unit test with:
@@ -52,6 +58,56 @@ bun run test:unit -- --run src/lib/giveaways/model.test.ts
 Root `bun run typecheck` does not invoke Svelte checking because this package exposes `check` rather
 than `typecheck`; always run `bun run check` for web changes. For full web verification, run
 `bun run check`, `bun run test`, then `bun run build`.
+
+`bun run test` runs the Vitest suites followed by the end-to-end suite. `bun run test:e2e` builds
+the web package and starts its Node adapter at `http://127.0.0.1:4174` with a local stub API on an
+ephemeral port. This exercises server-side requests, document reloads, and cookie persistence
+without a database or live storefronts. Install Chromium with `bun run playwright install chromium`
+before running browser tests; CI also installs its system dependencies with `--with-deps`.
+
+## Localization
+
+English (`en`) and French (`fr`) share the same page URLs. On each request, language selection uses:
+
+1. A supported `claim_locale` preference cookie.
+2. The browser's `Accept-Language` preferences, matched by language and positive quality weight.
+3. English when no supported preference is available.
+
+Regional browser preferences such as `fr-CA` and `en-GB` select French and English respectively.
+Unsupported cookies and malformed or explicitly excluded (`q=0`) language preferences are ignored.
+Choosing **EN** or **FR** writes a site-scoped cookie with a one-year lifetime and reloads the current
+document. The HTML `lang` attribute, metadata, accessibility labels, interface, and giveaway content
+therefore use the selected language from the first render. Hydration reads the server-selected
+document language, and concurrent server requests have isolated locale state. Locale-dependent
+HTML and SvelteKit data responses use `Content-Language`, `Vary: Cookie, Accept-Language`, and
+`Cache-Control: private, no-cache`. Internal links use full-document navigation so a language change
+in another tab is applied to both the interface and API market on the next visit. Filter changes
+remain shallow URL updates without reloading the document.
+
+The web language selects a fixed API market:
+
+| Language | API query                 | Regional formatting |
+| -------- | ------------------------- | ------------------- |
+| English  | `locale=en-US&country=US` | `en-US`             |
+| French   | `locale=fr-FR&country=FR` | `fr-FR`             |
+
+Changing language can also change the available games and prices because it selects a different
+market. Titles and descriptions come from the API's localized storefront responses; stores may
+still supply untranslated titles or omit descriptions. Store refresh failures use localized web
+messages. Deadlines use UTC with localized dates and times, countdowns and counts use plural-aware
+messages, and prices use the API's minor-unit amount and currency with locale-aware formatting.
+
+Edit `i18n/en.json` and `i18n/fr.json` to change interface copy. Use descriptive keys,
+message parameters, and plural variants rather than concatenating translated sentence fragments.
+English is the base catalog and the compiler's fallback for a missing French message; a catalog
+coverage test ensures the shipped French catalog is complete.
+
+`i18n/project.inlang/settings.json` defines supported languages and loads the message-format plugin
+from the installed, locked dependency. `paraglide.config.ts` is shared by the Vite plugin and
+`scripts/compile-i18n.ts`. Vite generates messages for development, builds, and Vitest; `check`
+also compiles them before Svelte checking, so it works from a clean checkout. While using
+`check:watch`, run the dev server for live message regeneration or run `bun run i18n:compile` after
+editing catalogs. Treat `src/lib/paraglide` and the SDK's local project caches as generated output.
 
 ## UI And Assets
 
@@ -95,7 +151,8 @@ site domain, event endpoint, and enabled measurements. Use these environment-spe
 Both scripts track page views, outbound links, file downloads, and form submissions. They are
 cookie-free and automatically track initial page views and SvelteKit `pushState` and back/forward
 navigation. Query-only giveaway filter changes are UI state and are not counted as separate page
-views. The tracker and initializer are omitted during local development and automated tests.
+views. The tracker and initializer are omitted during local development and Vitest tests;
+end-to-end tests use a local empty tracker script.
 
 Clicking an available **View giveaway** link sends a `Giveaway Click` custom event with the giveaway
 title and store as properties. Add a matching custom-event goal named `Giveaway Click` in each

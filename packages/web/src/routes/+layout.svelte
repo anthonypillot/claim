@@ -1,7 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { ModeWatcher } from "mode-watcher";
-  import { onMount } from "svelte";
+  import { mode, ModeWatcher } from "mode-watcher";
   import SiteFooter from "$lib/components/site-footer.svelte";
   import SiteHeader from "$lib/components/site-header.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
@@ -9,28 +8,11 @@
   import "./layout.css";
 
   let { children } = $props();
-  let isDark = $state(false);
 
-  let favicon = $derived(isDark ? "/favicon-white.svg" : "/favicon.svg");
+  let favicon = $derived(mode.current === "dark" ? "/favicon-white.svg" : "/favicon.svg");
   let canonicalUrl = $derived(getWebUrl(page.url.pathname, page.url.origin));
   const apiUrl = getApiUrl("/openapi");
   const plausibleScriptUrl = getPlausibleScriptUrl();
-
-  onMount(() => {
-    function syncTheme() {
-      isDark = document.documentElement.classList.contains("dark");
-    }
-
-    syncTheme();
-
-    const observer = new MutationObserver(syncTheme);
-    observer.observe(document.documentElement, {
-      attributeFilter: ["class"],
-      attributes: true,
-    });
-
-    return () => observer.disconnect();
-  });
 </script>
 
 <svelte:head>

@@ -1,0 +1,109 @@
+{
+  "page_title": "Giveaways | Claim",
+  "page_description": "Discover free-to-keep games available now across major storefronts.",
+  "hero_title": "Games worth claiming",
+  "hero_description": "Current giveaways from Epic Games, Prime Gaming, GOG, and Steam, gathered in one place.",
+  "home_label": "Claim home",
+  "language_label": "Language",
+  "footer_credit": "Claim, built by",
+  "footer_navigation": "Footer navigation",
+  "footer_version": "Claim version {version}",
+  "theme_light": "Switch to light mode",
+  "theme_dark": "Switch to dark mode",
+  "filters_title": "Filter and sort giveaways",
+  "filters_store": "Filter by store",
+  "filters_all": "All stores",
+  "filters_store_count": "{store}, {count}",
+  "filters_sort": "Sort by ending soon",
+  "filters_ending_soon": "Ending soon",
+  "giveaway_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local formattedCount = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{formattedCount} giveaway",
+        "countPlural=*": "{formattedCount} giveaways"
+      }
+    }
+  ],
+  "refresh_all_failed": "Stores could not be refreshed",
+  "refresh_some_failed": "Some stores could not be refreshed",
+  "refresh_failed": "Could not refresh giveaways. Try again shortly.",
+  "giveaways_title": "Available giveaways",
+  "unavailable_title": "Giveaways could not be confirmed",
+  "unavailable_description": "No current giveaway data is available from the stores that failed to refresh. Try again shortly.",
+  "unavailable_store_title": "{store} giveaways could not be confirmed",
+  "unavailable_store_description": "{store} could not be refreshed and no cached giveaways are available. Try again shortly.",
+  "empty_title": "No giveaways available",
+  "empty_description": "There are no active free-to-keep games right now. Check back soon.",
+  "empty_store_title": "No {store} giveaways available",
+  "empty_store_description": "There are no active free-to-keep games from {store} right now. Try another store or check back soon.",
+  "artwork_label": "Artwork for {title}",
+  "artwork_unavailable": "Artwork unavailable",
+  "store_label": "Store: {store}",
+  "publisher_label": "Publisher",
+  "publisher_unknown": "Unknown",
+  "price_label": "Original price",
+  "expiry_label": "Free until",
+  "expiry_datetime": "{date}, {time}",
+  "expiry_accessible": "{remaining}; ends {date} UTC",
+  "expiry_tooltip": "Ends {date} UTC",
+  "expiry_unknown": "End date unknown",
+  "time_unknown": "End time unknown",
+  "time_ended": "Ended",
+  "time_minutes": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local formattedCount = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{formattedCount} minute left",
+        "countPlural=*": "{formattedCount} minutes left"
+      }
+    }
+  ],
+  "time_hours": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local formattedCount = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{formattedCount} hour left",
+        "countPlural=*": "{formattedCount} hours left"
+      }
+    }
+  ],
+  "time_days": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local formattedCount = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{formattedCount} day left",
+        "countPlural=*": "{formattedCount} days left"
+      }
+    }
+  ],
+  "giveaway_action": "View giveaway",
+  "giveaway_unavailable": "Store link unavailable",
+  "error_not_found_title": "Page not found",
+  "error_not_found_description": "The page you are looking for does not exist or may have moved.",
+  "error_title": "Something went wrong",
+  "error_description": "Claim could not load this page. Please try again.",
+  "error_status": "Error {status}",
+  "error_retry": "Try again",
+  "error_home": "Return home"
+}

@@ -4,7 +4,9 @@
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import { formatExpiry, formatStore, formatTimeLeft, getGiveawayImage, type Giveaway } from "$lib/giveaways/model";
+  import { formatExpiry, formatPrice, formatStore, formatTimeLeft, getGiveawayImage, type Giveaway } from "$lib/giveaways/model";
+  import { m } from "$lib/paraglide/messages";
+  import { getLocale } from "$lib/paraglide/runtime";
   import { cn } from "$lib/utils";
   import { ArrowUpRight01Icon, Clock01Icon } from "@hugeicons/core-free-icons";
   import { HugeiconsIcon } from "@hugeicons/svelte";
@@ -12,10 +14,11 @@
   let { giveaway, now }: { giveaway: Giveaway; now: number } = $props();
 
   const image = $derived(getGiveawayImage(giveaway.images));
-  const expiry = $derived(formatExpiry(giveaway.freeUntil));
-  const timeLeft = $derived(formatTimeLeft(giveaway.freeUntil, now));
-  const expiryLabel = $derived(expiry === "Unknown" ? timeLeft : `${timeLeft}; ends ${expiry} UTC`);
-  const expiryTooltip = $derived(expiry === "Unknown" ? "End date unknown" : `Ends ${expiry} UTC`);
+  const expiry = $derived(formatExpiry(giveaway.freeUntil, getLocale()));
+  const timeLeft = $derived(formatTimeLeft(giveaway.freeUntil, now, getLocale()));
+  const expiryLabel = $derived(expiry === null ? timeLeft : m.expiry_accessible({ remaining: timeLeft, date: expiry }));
+  const expiryTooltip = $derived(expiry === null ? m.expiry_unknown() : m.expiry_tooltip({ date: expiry }));
+  const publisher = $derived(!giveaway.seller || giveaway.seller === "Unknown" ? m.publisher_unknown() : giveaway.seller);
 
   function trackGiveawayClick() {
     window.plausible?.("Giveaway Click", {
@@ -29,9 +32,9 @@
 
 <Card.Root class="h-full">
   {#if image}
-    <img src={image} alt="Artwork for {giveaway.title}" class="aspect-video w-full object-cover" loading="lazy" />
+    <img src={image} alt={m.artwork_label({ title: giveaway.title })} class="aspect-video w-full object-cover" loading="lazy" />
   {:else}
-    <div class="bg-muted text-muted-foreground flex aspect-video items-center justify-center">Artwork unavailable</div>
+    <div class="bg-muted text-muted-foreground flex aspect-video items-center justify-center">{m.artwork_unavailable()}</div>
   {/if}
 
   <Card.Header>
@@ -40,7 +43,7 @@
         <Tooltip.Trigger
           type="button"
           class={cn(badgeVariants({ variant: "outline" }), "size-7 cursor-help p-1")}
-          aria-label={`Store: ${formatStore(giveaway.store)}`}
+          aria-label={m.store_label({ store: formatStore(giveaway.store) })}
         >
           <StoreLogo store={giveaway.store} class="size-5" />
         </Tooltip.Trigger>
@@ -53,15 +56,15 @@
 
   <Card.Content class="flex flex-1 flex-col gap-3">
     <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-      <dt class="text-muted-foreground">Publisher</dt>
-      <dd class="truncate text-right">{giveaway.seller}</dd>
+      <dt class="text-muted-foreground">{m.publisher_label()}</dt>
+      <dd class="truncate text-right">{publisher}</dd>
 
       {#if giveaway.price}
-        <dt class="text-muted-foreground">Original price</dt>
-        <dd class="text-muted-foreground text-right"><s class="line-through">{giveaway.price.formatted}</s></dd>
+        <dt class="text-muted-foreground">{m.price_label()}</dt>
+        <dd class="text-muted-foreground text-right"><s class="line-through">{formatPrice(giveaway.price, getLocale())}</s></dd>
       {/if}
 
-      <dt class="text-muted-foreground">Free until</dt>
+      <dt class="text-muted-foreground">{m.expiry_label()}</dt>
       <dd class="text-right">
         <Tooltip.Root>
           <Tooltip.Trigger
@@ -87,7 +90,7 @@
       class="w-full"
       onclick={trackGiveawayClick}
     >
-      {giveaway.url ? "View giveaway" : "Store link unavailable"}
+      {giveaway.url ? m.giveaway_action() : m.giveaway_unavailable()}
       {#if giveaway.url}
         <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />
       {/if}

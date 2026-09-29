@@ -1,3 +1,7 @@
+import { LOCALE_MARKETS } from "$lib/i18n/locale";
+import { m } from "$lib/paraglide/messages";
+import { baseLocale, type Locale } from "$lib/paraglide/runtime";
+
 export const STORE_IDS = ["epic-games", "prime-gaming", "gog", "steam"] as const;
 
 export type StoreId = (typeof STORE_IDS)[number];
@@ -103,12 +107,6 @@ const STORE_LABELS = {
   steam: "Steam",
 } satisfies Record<StoreId, string>;
 
-const expiryFormatter = new Intl.DateTimeFormat("en", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "UTC",
-});
-
 const MINUTE_IN_MS = 60_000;
 const HOUR_IN_MS = 60 * MINUTE_IN_MS;
 const DAY_IN_MS = 24 * HOUR_IN_MS;
@@ -121,23 +119,43 @@ export function formatStore(store: StoreId): string {
   return STORE_LABELS[store];
 }
 
-export function formatExpiry(value: string): string {
+export function formatExpiry(value: string, locale: Locale = baseLocale): string | null {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Unknown" : expiryFormatter.format(date).replace(" at ", ", ");
+  if (Number.isNaN(date.getTime())) return null;
+
+  const region = LOCALE_MARKETS[locale].locale;
+  return m.expiry_datetime(
+    {
+      date: new Intl.DateTimeFormat(region, { dateStyle: "medium", timeZone: "UTC" }).format(date),
+      time: new Intl.DateTimeFormat(region, { timeStyle: "short", timeZone: "UTC" }).format(date),
+    },
+    { locale },
+  );
 }
 
-export function formatTimeLeft(value: string, now: number): string {
+export function formatTimeLeft(value: string, now: number, locale: Locale = baseLocale): string {
   const expiry = Date.parse(value);
-  if (Number.isNaN(expiry)) return "End time unknown";
+  if (Number.isNaN(expiry)) return m.time_unknown({}, { locale });
 
   const remaining = expiry - now;
-  if (remaining <= 0) return "Ended";
+  if (remaining <= 0) return m.time_ended({}, { locale });
 
-  if (remaining < HOUR_IN_MS) return formatRemainingUnit(Math.ceil(remaining / MINUTE_IN_MS), "minute");
-  if (remaining < DAY_IN_MS) return formatRemainingUnit(Math.ceil(remaining / HOUR_IN_MS), "hour");
-  return formatRemainingUnit(Math.ceil(remaining / DAY_IN_MS), "day");
+  if (remaining < HOUR_IN_MS)
+    return m.time_minutes({ count: Math.ceil(remaining / MINUTE_IN_MS) }, { locale });
+  if (remaining < DAY_IN_MS)
+    return m.time_hours({ count: Math.ceil(remaining / HOUR_IN_MS) }, { locale });
+  return m.time_days({ count: Math.ceil(remaining / DAY_IN_MS) }, { locale });
 }
 
-function formatRemainingUnit(value: number, unit: "minute" | "hour" | "day"): string {
-  return `${value} ${unit}${value === 1 ? "" : "s"} left`;
+export function formatPrice(price: NonNullable<Giveaway["price"]>, locale: Locale): string {
+  try {
+    const formatter = new Intl.NumberFormat(LOCALE_MARKETS[locale].locale, {
+      style: "currency",
+      currency: price.currency,
+    });
+    const fractionDigits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
+    return formatter.format(price.original / 10 ** fractionDigits);
+  } catch {
+    return price.formatted;
+  }
 }
