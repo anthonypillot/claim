@@ -1,3 +1,10 @@
+## [1.0.7](https://github.com/anthonypillot/claim/compare/v1.0.6...v1.0.7) (2026-09-29)
+
+
+### Performance Improvements
+
+* **web:** add English and French localization ([#55](https://github.com/anthonypillot/claim/issues/55)) ([32a5491](https://github.com/anthonypillot/claim/commit/32a54914d3531f505f68bb20075b6f157f0e0fcc))
+
 ## [1.0.6](https://github.com/anthonypillot/claim/compare/v1.0.5...v1.0.6) (2026-08-21)
 
 
