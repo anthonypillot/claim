@@ -28,8 +28,9 @@ report.[0-9]*.json
 .cache
 *.tsbuildinfo
 
-# local agent tooling
+# AI, LLM and agent related files
 .agents/
+skills-lock.json
 
 # IntelliJ based IDEs
 .idea
