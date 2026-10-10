@@ -40,23 +40,48 @@ faster on repeat reads and resilient to upstream hiccups:
 - **Refresh coordination** — concurrent requests share refresh work within one process, and a token-guarded
   60-second Postgres lease prevents duplicate upstream calls across replicas.
 
-See [`giveaways-flow.md`](./giveaways-flow.md) for a concise table of cache and upstream-call behavior.
+See [`giveaways-flow.md`](./features/giveaways-flow.md) for a concise table of cache and upstream-call behavior.
 
 ### More stores
 
 GamerPower is next.
 
-### Scheduled notifications
+### Discord Giveaway Alerts (implemented, opt-in)
 
-On a regular cadence (e.g. weekly), push the current free-games digest — with per-game detail —
-out of the API rather than only serving it on request:
+An installable Discord bot announces newly detected Giveaway Occurrences, not recurring digests
+of everything currently free. The [accepted design](./features/discord-notifications.md) replaces the
+original email/Discord digest proposal:
 
-- **Email** — send the same digest to a list of recipients.
-- **Discord** — post the list to a configured channel.
+- **Discovery** — configurable hourly checks inside the API process, independent of website
+  traffic; successful public API refreshes also participate in discovery.
+- **Announcements** — one compact message per occurrence, with title, Store, claim link, deadline,
+  and optional artwork/original price. Prime offers disclose the membership requirement.
+- **No backlog** — the first successful observation establishes a baseline without alerts;
+  genuinely later giveaway periods can alert, but extensions and ambiguous returns do not.
+- **Delivery policy** — prefer missed alerts over duplicates: never resend an uncertain attempt.
+  Pending alerts expire after 24 hours or the Giveaway deadline, whichever comes first.
 
-### Subscription management
+Email is a later step. DMs, expiry reminders, periodic digests, automatic mentions, and edits or
+deletions of sent announcements are not part of the Discord first version.
 
-Endpoints to manage who gets notified and where:
+### Discord subscription management (implemented, public launch pending)
 
-- **Email recipients** — add, update, and remove addresses on the mailing list.
-- **Discord** — configure the target channel / webhook.
+Administrators manage one ordinary text-channel destination per server through `/claim setup`,
+`/claim status`, and `/claim stop`, without Claim accounts or a public subscription CRUD API:
+
+- **Preferences** — all supported Stores by default or a selected subset; English/US or
+  French/France. All-Stores mode follows future supported Stores without a catch-up.
+- **Changes** — apply forward only; newly followed Stores/Markets establish fresh baselines.
+- **Authorization** — signed HTTP interactions plus execution-time Manage Server/Administrator
+  checks and destination permission validation; no persistent Gateway connection.
+- **Lifecycle** — disable broken destinations until repaired, retain diagnostics at most 30 days,
+  and purge server-specific data on stop or confirmed bot removal.
+- **Public launch** — install/help/privacy information, a support/deletion route, configured Discord
+  credentials, and protected data storage are required before enabling the feature.
+
+[Issue #56](https://github.com/anthonypillot/claim/issues/56) covers discovery/delivery and
+Discord-native subscription management together, reusing the existing Postgres foundation.
+
+Implementation defaults to off. Public application provisioning, protected storage, and the
+configured private support route must be verified through the
+[operations checklist](./features/discord-operations.md) before public installation is enabled.

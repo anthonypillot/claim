@@ -77,6 +77,8 @@ or both.
 
 - [Roadmap](docs/roadmap.md)
 - [Architecture](docs/architecture.md)
-- [Giveaways request flow](docs/giveaways-flow.md)
+- [Giveaways request flow](docs/features/giveaways-flow.md)
+- [Discord giveaway alerts](docs/features/discord-notifications.md)
+- [Discord operations](docs/features/discord-operations.md)
 - [Web development](packages/web/README.md)
 - [Agent guidance](AGENTS.md)

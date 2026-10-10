@@ -34,20 +34,9 @@ packages/api/
 │  │  │     ├─ steam/
 │  │  │     ├─ gog/
 │  │  │     └─ gamerpower/      [planned]
-│  │  ├─ notifications/         [planned]
-│  │  │  ├─ index.ts
-│  │  │  ├─ service.ts
-│  │  │  ├─ scheduler.ts
-│  │  │  ├─ digest.ts
-│  │  │  └─ channels/
-│  │  │     ├─ shared.ts
-│  │  │     ├─ discord/
-│  │  │     └─ email/
-│  │  └─ subscriptions/         [planned]
-│  │     ├─ index.ts
-│  │     ├─ service.ts
-│  │     ├─ model.ts
-│  │     └─ repository.ts
+│  │  ├─ discord/               signed interactions, commands, bot REST adapter
+│  │  ├─ notifications/         occurrence detection, durable delivery, runtime scheduling
+│  │  └─ subscriptions/         server configuration, baselines, lifecycle
 │  ├─ db/                      shared persistence infrastructure
 │  │  ├─ client.ts             lazy getDb() + Database type
 │  │  ├─ schema.ts             Drizzle tables (centralized, Drizzle convention)
@@ -60,7 +49,7 @@ packages/api/
 
 ## Persistence (read-through cache)
 
-See [`giveaways-flow.md`](./giveaways-flow.md) for the cache decisions and request flow.
+See [`giveaways-flow.md`](./features/giveaways-flow.md) for the cache decisions and request flow.
 
 `GET /giveaways*` is a **read-through cache** over **Postgres** (Drizzle ORM on Bun's native SQL driver).
 Freshness is tracked independently per `(store, locale, country)`. Non-empty snapshots become stale at their
@@ -74,7 +63,7 @@ module consumes one resolution per Store and owns aggregate fan-out, sorting, de
 per-Store response policy. Store retrieval remains the real adapter seam; PGlite exercises the concrete Drizzle
 implementation in tests without a separate persistence interface.
 
-See [`giveaways-flow.md`](./giveaways-flow.md) for the complete cache decision table and failure behavior.
+See [`giveaways-flow.md`](./features/giveaways-flow.md) for the complete cache decision table and failure behavior.
 
 `src/db/` holds shared persistence infrastructure: connection/test plumbing and centralized Drizzle table
 definitions. Following Drizzle's default layout, table definitions live in `src/db/schema.ts`
@@ -83,3 +72,38 @@ and migrations are generated into `./drizzle` (`drizzle.config.ts` sets `schema:
 persistence implementation and model in its feature module. Migrations are applied with the `drizzle-kit migrate` CLI
 (`db:migrate`), so there is no hand-written runtime migrator. `drizzle-kit` (SQL generation + migrate) and
 `@electric-sql/pglite` (test database) are dev-only and excluded from the production bundle, like `pino-pretty`.
+
+## Discord notifications (opt-in, public launch gated)
+
+See [`discord-notifications.md`](./features/discord-notifications.md) for the accepted scope and acceptance
+coverage, tracked together in [issue #56](https://github.com/anthonypillot/claim/issues/56). The
+original digest/email and public subscription-CRUD proposals are superseded:
+
+- **Discord integration** owns signed server-only HTTP interactions, command authorization, and
+  the bot REST transport. Administrators use `/claim setup`, `/claim status`, and `/claim stop`;
+  no Gateway connection, Claim account, or public subscription-management API is needed.
+- **Subscriptions** owns one text-channel destination per server, Store/Market preferences,
+  baseline eligibility, forward-only changes, and disabled/deletion lifecycle. It reuses `src/db/`
+  rather than introducing another persistence foundation.
+- **Notifications** owns hourly traffic-independent monitoring, recurring-occurrence detection,
+  durable eligible delivery work, outcomes, and scheduling inside the API process. Successful
+  public reads of monitored scopes participate in the same discovery path. Persist the durable
+  handoff with successful snapshot replacement, not through a lossy timer-only scan or callback.
+
+The Giveaway Cache Scope remains the shared refresh boundary: preserve its adapter, transaction,
+failure, and lease behavior while adding an independent hourly refresh deadline for subscribed
+scopes. The current 24-hour read-through freshness alone cannot support hourly discovery.
+
+Start background work in the runtime bootstrap, never in `buildApp` or import-time side effects.
+Postgres coordinates API replicas and stores delivery attempts; refresh leases alone do not
+deduplicate sends. No separate worker deployment, Redis, or message broker is planned. Uncertain
+sends are not retried, as explained in the
+[reliability ADR](./adr/0001-avoid-uncertain-discord-resends.md).
+
+Email adapters, generalized digest contracts, and account/dashboard infrastructure are deferred.
+The Discord module exposes signed HTTP interactions; subscriptions expose setup/status/stop;
+notifications expose one monitoring/delivery cycle and bootstrap-only start/stop. Their concrete
+Drizzle implementation is tested with PGlite and mocked Store/Discord HTTP adapters. The web
+provides localized install/help/privacy/support pages behind a separate public-install launch gate.
+See [Discord Operations](./features/discord-operations.md) for prerequisites that still require operator
+verification.

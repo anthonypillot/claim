@@ -8,7 +8,7 @@ Claim is a Bun workspace monorepo (`packages/*`) for free-game giveaways:
 - `packages/web`: SvelteKit 2 + Svelte 5 site; Tailwind CSS 4 and shadcn-svelte.
 
 `docs/architecture.md` describes the API's feature-based target structure; planned entries are not
-implemented. `docs/giveaways-flow.md` documents the read-through cache.
+implemented. `docs/features/giveaways-flow.md` documents the read-through cache.
 
 ## Commands
 
