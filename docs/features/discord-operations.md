@@ -51,9 +51,12 @@ an arbitrary server ID, screenshot, claimed member ID, or public GitHub comment 
   approved retention policy. Previously sent Discord messages are outside this deletion scope.
 
 The bot receives member metadata transiently with commands but does not persist profiles or raw
-payloads. Unassociated replay hashes expire after ten minutes. Diagnostics and unrepaired disabled
+payloads. Unassociated replay hashes expire after ten minutes; token-salted REST bucket hashes
+expire with their rate-limit embargo and contain no raw server/channel IDs. Diagnostics and unrepaired disabled
 subscriptions have a 30-day maximum live retention window; cleanup and bounded daily removal
-checks require the API to be operating. Outages, Discord errors, and rate limits can delay them.
+checks require the Discord runtime to be enabled and the API to be operating. Outages, disabled
+monitoring, Discord errors, and rate limits can delay them. If disabling all Discord runtimes,
+arrange authorized retention cleanup rather than leaving stored Discord data unattended.
 Audit these limitations and the infrastructure's backup policies rather than promising immediate
 deletion merely from bot removal.
 
@@ -65,7 +68,13 @@ deletion merely from bot removal.
 - **Missing destination/permissions:** that subscription is disabled. `/claim setup` validates a
   repaired destination and establishes fresh baselines; it does not replay old alerts.
 - **Explicit message `429`:** wait for `retry_after` and rate-limit headers; replicas share
-  destination/global backoff. Pending age and latest deadline still apply.
+  monotonic destination/global backoff. Removal-check global rate limits also suspend further
+  Discord requests; blocked destinations do not occupy healthy servers' delivery batches. Pending
+  age and latest deadline still apply.
+- **Setup and REST limits:** every bot-authenticated request checks durable global/bucket embargoes,
+  including validation, confirmations, and registration. Ephemeral interaction webhooks have their
+  own tokens and Discord exempts them from the bot's global limit, so status/stop can still respond.
+  Channel cooldowns survive settings revisions; changed destinations do not inherit old cooldowns.
 - **Network/timeout/server uncertainty or expired started attempt:** status reports `unknown`.
   Never manually turn an uncertain attempt back into pending work or claim exactly-once delivery.
 - **Database failure:** the next bounded cycle tries again. A started attempt with an unrecorded

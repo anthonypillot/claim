@@ -4,6 +4,6 @@
     "lib": ["ES2023"],
     "types": ["bun", "node"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "scripts/**/*.ts"],
   "exclude": ["build", "coverage"]
 }

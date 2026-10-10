@@ -10,6 +10,7 @@
   "type": "module",
   "main": "build/index.js",
   "scripts": {
+    "discord:register": "bun scripts/register-discord.ts",
     "clean": "rm -rf ./build",
     "dev": "bun run --watch src/index.ts",
     "build": "bun run clean && bun build --target=bun --outdir ./build ./src/index.ts",
@@ -33,6 +34,7 @@
     "@elysia/opentelemetry": "^1.4.12",
     "@elysiajs/cors": "^1.4.2",
     "@elysiajs/openapi": "^1.4.15",
+    "@sinclair/typebox": "^0.34.0",
     "drizzle-orm": "^1.0.0-rc.4",
     "elysia": "^1.4.15",
     "pino": "^10.3.1"

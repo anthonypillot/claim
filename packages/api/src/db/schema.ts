@@ -85,3 +85,109 @@ export const giveawayFetches = pgTable(
     ),
   ],
 );
+
+export const discordSubscriptions = pgTable("discord_subscriptions", {
+  guildId: text("guild_id").primaryKey(),
+  channelId: text("channel_id").notNull(),
+  locale: text("locale").notNull(),
+  country: text("country").notNull(),
+  // NULL means all current and future supported Stores; a non-empty array is a fixed selection.
+  stores: text("stores").array(),
+  revision: text("revision").notNull(),
+  disabledAt: timestamp("disabled_at", seenAt),
+  disabledReason: text("disabled_reason"),
+  nextCheckAt: timestamp("next_check_at", seenAt).notNull().defaultNow(),
+  checkToken: text("check_token"),
+  checkExpiresAt: timestamp("check_expires_at", seenAt),
+  deliveryAfter: timestamp("delivery_after", seenAt),
+});
+
+export const discordFollows = pgTable(
+  "discord_follows",
+  {
+    guildId: text("guild_id")
+      .notNull()
+      .references(() => discordSubscriptions.guildId, { onDelete: "cascade" }),
+    store: text("store").notNull(),
+    baselineAt: timestamp("baseline_at", seenAt),
+  },
+  (table) => [primaryKey({ columns: [table.guildId, table.store] })],
+);
+
+// Short-lived replay hashes contain no server/member identifiers or interaction tokens.
+export const discordInteractions = pgTable("discord_interactions", {
+  hash: text("hash").primaryKey(),
+  expiresAt: timestamp("expires_at", seenAt).notNull(),
+});
+
+// Independent Store/Market history is deliberately not owned by a Discord server.
+export const giveawayOccurrences = pgTable(
+  "giveaway_occurrences",
+  {
+    store: text("store").notNull(),
+    id: text("id").notNull(),
+    locale: text("locale").notNull(),
+    country: text("country").notNull(),
+    occurrenceId: text("occurrence_id").notNull(),
+    detectedAt: timestamp("detected_at", seenAt).notNull(),
+    freeUntil: timestamp("free_until", seenAt).notNull(),
+    active: boolean("active").notNull(),
+    endedAt: timestamp("ended_at", seenAt),
+  },
+  (table) => [primaryKey({ columns: [table.store, table.id, table.locale, table.country] })],
+);
+
+export const discordDeliveries = pgTable(
+  "discord_deliveries",
+  {
+    id: text("id").primaryKey(),
+    guildId: text("guild_id")
+      .notNull()
+      .references(() => discordSubscriptions.guildId, { onDelete: "cascade" }),
+    channelId: text("channel_id").notNull(),
+    revision: text("revision").notNull(),
+    store: text("store").notNull(),
+    listingId: text("listing_id").notNull(),
+    locale: text("locale").notNull(),
+    country: text("country").notNull(),
+    occurrenceId: text("occurrence_id").notNull(),
+    detectedAt: timestamp("detected_at", seenAt).notNull(),
+    updatedAt: timestamp("updated_at", seenAt).notNull(),
+    state: text("state", {
+      enum: [
+        "pending",
+        "attempting",
+        "retry",
+        "sent",
+        "unknown",
+        "cancelled",
+        "expired",
+        "rejected",
+      ],
+    }).notNull(),
+    availableAt: timestamp("available_at", seenAt).notNull(),
+    attemptToken: text("attempt_token"),
+    attemptExpiresAt: timestamp("attempt_expires_at", seenAt),
+    messageId: text("message_id"),
+  },
+  (table) => [
+    index("discord_deliveries_due_idx").on(table.state, table.availableAt),
+    index("discord_deliveries_guild_idx").on(table.guildId),
+  ],
+);
+
+export const discordRuntime = pgTable("discord_runtime", {
+  tokenFingerprint: text("token_fingerprint").primaryKey(),
+  paused: boolean("paused").notNull().default(false),
+  blockedUntil: timestamp("blocked_until", seenAt),
+});
+
+// Unassociated, token-salted bucket hashes coordinate REST limits without retaining server IDs.
+export const discordRateLimits = pgTable(
+  "discord_rate_limits",
+  {
+    bucketHash: text("bucket_hash").primaryKey(),
+    blockedUntil: timestamp("blocked_until", seenAt).notNull(),
+  },
+  (table) => [index("discord_rate_limits_expiry_idx").on(table.blockedUntil)],
+);

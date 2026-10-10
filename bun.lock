@@ -22,6 +22,7 @@
         "@elysia/opentelemetry": "^1.4.12",
         "@elysiajs/cors": "^1.4.2",
         "@elysiajs/openapi": "^1.4.15",
+        "@sinclair/typebox": "^0.34.0",
         "drizzle-orm": "^1.0.0-rc.4",
         "elysia": "^1.4.15",
         "pino": "^10.3.1",

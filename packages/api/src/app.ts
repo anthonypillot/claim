@@ -4,6 +4,8 @@ import { Elysia, t } from "elysia";
 
 import faviconSvg from "../../web/static/favicon.svg" with { type: "text" };
 import { createGiveaways } from "./modules/giveaways/index.ts";
+import type { GiveawayReads } from "./modules/giveaways/read.ts";
+import type { createDiscordInteractions } from "./modules/discord/index.ts";
 import { type CheckReadiness, createHealth } from "./modules/health/index.ts";
 import { createLogger } from "./utils/logger.ts";
 
@@ -25,6 +27,8 @@ export type AppMetadata = {
 export type AppDependencies = {
   checkReadiness?: CheckReadiness;
   apiUrl?: string;
+  giveawayReads?: GiveawayReads;
+  discord?: ReturnType<typeof createDiscordInteractions>;
 };
 
 // Capitalize the raw package name and suffix it, e.g. "claim" -> "Claim API".
@@ -79,5 +83,6 @@ export function buildApp(metadata: AppMetadata, dependencies: AppDependencies = 
       { response: { 200: ApiMetadataResponseSchema } },
     )
     .use(createHealth(dependencies.checkReadiness))
-    .use(createGiveaways());
+    .use(createGiveaways(dependencies.giveawayReads))
+    .use(dependencies.discord ?? new Elysia());
 }

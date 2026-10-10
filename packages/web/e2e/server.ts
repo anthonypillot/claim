@@ -66,6 +66,9 @@ const app = spawn(process.execPath, ["build/index.js"], {
     PUBLIC_API_URL: apiOrigin,
     PUBLIC_PLAUSIBLE_SCRIPT_URL: `${apiOrigin}/tracker.js`,
     ROBOTS_ALLOW_INDEXING: "false",
+    DISCORD_PUBLIC_INSTALL_ENABLED: "true",
+    DISCORD_APPLICATION_ID: "100000000000000003",
+    DISCORD_SUPPORT_URL: "https://support.example/claim",
   },
 });
 

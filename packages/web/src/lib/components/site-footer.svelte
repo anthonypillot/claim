@@ -28,6 +28,14 @@
       <ul class="flex flex-wrap items-center gap-x-5 gap-y-2">
         <li>
           <a
+            href="/discord"
+            data-sveltekit-reload
+            class="text-foreground focus-visible:ring-ring rounded-sm font-medium underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:outline-none"
+            >{m.discord_help()}</a
+          >
+        </li>
+        <li>
+          <a
             href={apiUrl}
             target="_blank"
             rel="noreferrer"

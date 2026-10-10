@@ -16,6 +16,7 @@ function create() {
 }
 
 export type Database = ReturnType<typeof create>;
+export type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 let cached: Database | undefined;
 
@@ -26,4 +27,10 @@ let cached: Database | undefined;
  */
 export function getDb(): Database {
   return (cached ??= create());
+}
+
+/** Bootstrap shutdown closes only an initialized pool; it never creates a connection. */
+export async function closeDb(): Promise<void> {
+  await cached?.$client.close({ timeout: 5 });
+  cached = undefined;
 }

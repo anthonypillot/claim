@@ -121,6 +121,26 @@ variants in `static/brand/`. Treat those files as generated outputs of
 
 ## Configuration And Deployment
 
+### Discord Information
+
+`/discord` explains installation, preferences, silent baselines, and best-effort delivery.
+`/discord/privacy` describes bot data and retention; `/discord/support` links to the operator's
+private, verified-request support form. These pages and the footer link are localized in English
+and French; management remains inside Discord.
+
+Public installation is off by default. When ready, set the server-only runtime variables
+`DISCORD_PUBLIC_INSTALL_ENABLED=true`, `DISCORD_APPLICATION_ID`, and `DISCORD_SUPPORT_URL`.
+The support URL must be credential-free HTTPS. Only the resulting install/support URLs reach
+the browser; never configure a bot token in the web package. The install URL requests guild-only
+installation and only View Channel, Send Messages, and Embed Links. Without the launch flag,
+the pages explain that public installation/support are not yet available.
+
+Follow the [operations checklist](../../docs/features/discord-operations.md) before enabling the flag.
+Discord provisioning, storage safeguards, a real support provider, and administrator verification
+are operator prerequisites, not guarantees made by building this website.
+
+### Runtime Environment
+
 Production requires these runtime environment variables:
 
 | Variable                      | Purpose                                                 |

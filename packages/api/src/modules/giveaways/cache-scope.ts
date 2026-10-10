@@ -4,6 +4,7 @@ import type { Database } from "../../db/client.ts";
 import type { GiveawayRow, NewGiveawayRow } from "../../db/schema.ts";
 import { giveawayFetches, giveaways } from "../../db/schema.ts";
 import { createLogger } from "../../utils/logger.ts";
+import { recordSuccessfulObservation } from "../notifications/observation.ts";
 import type { Giveaway, Market, StoreId } from "./model.ts";
 import type { FetchFreeGames } from "./stores/shared.ts";
 import { normalizeExternalUrl } from "./stores/shared.ts";
@@ -107,11 +108,34 @@ function toGiveaway(row: GiveawayRow): Giveaway {
   };
 }
 
-async function isFresh(db: Database, scope: StoreScope): Promise<boolean> {
+export type CacheScopeOptions = { clock?: () => Date; monitoringIntervalMs?: number };
+
+function refreshDue(scope: StoreScope, now: Date, intervalMs: number) {
+  const cutoff = new Date(now.getTime() - intervalMs);
+  return or(
+    isNull(giveawayFetches.fetchedAt),
+    lte(giveawayFetches.freshUntil, now),
+    sql`exists (
+    select 1 from discord_subscriptions s
+    left join discord_follows f on f.guild_id = s.guild_id and f.store = ${scope.store}
+    where s.disabled_at is null and s.locale = ${scope.locale} and s.country = ${scope.country}
+    and (s.stores is null or ${scope.store} = any(s.stores))
+    and (f.baseline_at is null or ${giveawayFetches.fetchedAt} <= ${cutoff})
+  )`,
+  );
+}
+
+async function isFresh(
+  db: Database,
+  scope: StoreScope,
+  timing: { now: Date; intervalMs: number },
+): Promise<boolean> {
   const rows = await db
     .select({ store: giveawayFetches.store })
     .from(giveawayFetches)
-    .where(and(fetchScopeWhere(scope), gt(giveawayFetches.freshUntil, sql`now()`)))
+    .where(
+      and(fetchScopeWhere(scope), sql`not (${refreshDue(scope, timing.now, timing.intervalMs)})`),
+    )
     .limit(1);
   return rows.length === 1;
 }
@@ -125,45 +149,47 @@ async function hasSuccessfulSnapshot(db: Database, scope: StoreScope): Promise<b
   return rows.length === 1;
 }
 
-async function acquireRefreshLease(db: Database, scope: StoreScope): Promise<string | null> {
+async function acquireRefreshLease(
+  db: Database,
+  scope: StoreScope,
+  timing: { now: Date; intervalMs: number },
+): Promise<string | null> {
   const token = crypto.randomUUID();
   const rows = await db
     .insert(giveawayFetches)
     .values({
       ...scope,
       leaseToken: token,
-      leaseExpiresAt: sql`now() + ${REFRESH_LEASE_SECONDS} * interval '1 second'`,
+      leaseExpiresAt: new Date(timing.now.getTime() + REFRESH_LEASE_SECONDS * 1000),
     })
     .onConflictDoUpdate({
       target: [giveawayFetches.store, giveawayFetches.locale, giveawayFetches.country],
       set: {
         leaseToken: token,
-        leaseExpiresAt: sql`now() + ${REFRESH_LEASE_SECONDS} * interval '1 second'`,
+        leaseExpiresAt: new Date(timing.now.getTime() + REFRESH_LEASE_SECONDS * 1000),
       },
       setWhere: and(
-        or(isNull(giveawayFetches.fetchedAt), lte(giveawayFetches.freshUntil, sql`now()`)),
+        refreshDue(scope, timing.now, timing.intervalMs),
         or(
           isNull(giveawayFetches.failedAt),
           lte(
             giveawayFetches.failedAt,
-            sql`now() - ${REFRESH_FAILURE_COOLDOWN_MINUTES} * interval '1 minute'`,
+            new Date(timing.now.getTime() - REFRESH_FAILURE_COOLDOWN_MINUTES * 60000),
           ),
         ),
-        or(isNull(giveawayFetches.leaseExpiresAt), lte(giveawayFetches.leaseExpiresAt, sql`now()`)),
+        or(isNull(giveawayFetches.leaseExpiresAt), lte(giveawayFetches.leaseExpiresAt, timing.now)),
       ),
     })
     .returning({ token: giveawayFetches.leaseToken });
   return rows[0]?.token === token ? token : null;
 }
 
-async function recordRefreshFailure(
-  db: Database,
-  scope: StoreScope,
-  leaseToken: string,
-): Promise<void> {
+type RefreshFailure = { db: Database; scope: StoreScope; leaseToken: string; now: Date };
+async function recordRefreshFailure(failure: RefreshFailure): Promise<void> {
+  const { db, scope, leaseToken, now } = failure;
   await db
     .update(giveawayFetches)
-    .set({ failedAt: sql`now()`, leaseToken: null, leaseExpiresAt: null })
+    .set({ failedAt: now, leaseToken: null, leaseExpiresAt: null })
     .where(and(fetchScopeWhere(scope), eq(giveawayFetches.leaseToken, leaseToken)));
 }
 
@@ -172,11 +198,11 @@ type ReplaceSnapshotOptions = {
   scope: StoreScope;
   items: Giveaway[];
   leaseToken: string;
+  now: Date;
 };
 
 async function replaceSnapshot(options: ReplaceSnapshotOptions): Promise<number | null> {
-  const { db, scope, items, leaseToken } = options;
-  const now = new Date();
+  const { db, scope, items, leaseToken, now } = options;
   const deduped = new Map(items.map((item) => [item.id, item]));
   const rows = [...deduped.values()].map((item) => toRow(scope, item, now));
   const refreshDeadline = new Date(now.getTime() + CACHE_TTL_HOURS * 60 * 60 * 1000);
@@ -218,10 +244,12 @@ async function replaceSnapshot(options: ReplaceSnapshotOptions): Promise<number 
         });
     }
 
+    await recordSuccessfulObservation({ tx, scope, items: [...deduped.values()], now });
+
     await tx
       .update(giveawayFetches)
       .set({
-        fetchedAt: sql`now()`,
+        fetchedAt: now,
         freshUntil: refreshDeadline,
         failedAt: null,
         leaseToken: null,
@@ -234,30 +262,35 @@ async function replaceSnapshot(options: ReplaceSnapshotOptions): Promise<number 
   return replaced ? rows.length : null;
 }
 
-async function findActiveGiveaways(db: Database, scope: StoreScope): Promise<Giveaway[]> {
+async function findActiveGiveaways(
+  db: Database,
+  scope: StoreScope,
+  now: Date,
+): Promise<Giveaway[]> {
   const rows = await db
     .select()
     .from(giveaways)
     .where(
-      and(
-        giveawayScopeWhere(scope),
-        eq(giveaways.isActive, true),
-        gt(giveaways.freeUntil, sql`now()`),
-      ),
+      and(giveawayScopeWhere(scope), eq(giveaways.isActive, true), gt(giveaways.freeUntil, now)),
     );
   return rows.map(toGiveaway);
 }
 
-async function refreshScope(
-  db: Database,
-  scope: StoreScope,
-  fetchFreeGames: FetchFreeGames,
-): Promise<RefreshOutcome> {
-  if (await isFresh(db, scope)) return { status: "fresh" };
+type RefreshScopeOptions = {
+  db: Database;
+  scope: StoreScope;
+  fetchFreeGames: FetchFreeGames;
+  clock: () => Date;
+  intervalMs: number;
+};
+async function refreshScope(options: RefreshScopeOptions): Promise<RefreshOutcome> {
+  const { db, scope, fetchFreeGames, clock, intervalMs } = options;
+  const timing = { now: clock(), intervalMs };
+  if (await isFresh(db, scope, timing)) return { status: "fresh" };
 
-  const leaseToken = await acquireRefreshLease(db, scope);
+  const leaseToken = await acquireRefreshLease(db, scope, timing);
   if (leaseToken === null) {
-    if (await isFresh(db, scope)) return { status: "fresh" };
+    if (await isFresh(db, scope, timing)) return { status: "fresh" };
     const hasSnapshot = await hasSuccessfulSnapshot(db, scope);
     log.debug({ ...scope, hasSnapshot }, "refresh deferred");
     return { status: hasSnapshot ? "degraded" : "unavailable" };
@@ -268,14 +301,14 @@ async function refreshScope(
   try {
     live = await fetchFreeGames({ locale: scope.locale, country: scope.country });
   } catch (error) {
-    await recordRefreshFailure(db, scope, leaseToken);
+    await recordRefreshFailure({ db, scope, leaseToken, now: clock() });
     log.error({ ...scope, err: error }, "upstream fetch failed");
     return {
       status: (await hasSuccessfulSnapshot(db, scope)) ? "degraded" : "unavailable",
     };
   }
 
-  const written = await replaceSnapshot({ db, scope, items: live, leaseToken });
+  const written = await replaceSnapshot({ db, scope, items: live, leaseToken, now: clock() });
   if (written === null) {
     return {
       status: (await hasSuccessfulSnapshot(db, scope)) ? "degraded" : "unavailable",
@@ -285,11 +318,15 @@ async function refreshScope(
   return { status: "refreshed" };
 }
 
-function coordinateRefresh(
-  db: Database,
-  adapters: StoreAdapters,
-  scope: StoreScope,
-): Promise<RefreshOutcome> {
+type CoordinateRefreshOptions = {
+  db: Database;
+  adapters: StoreAdapters;
+  scope: StoreScope;
+  clock: () => Date;
+  intervalMs: number;
+};
+function coordinateRefresh(options: CoordinateRefreshOptions): Promise<RefreshOutcome> {
+  const { db, adapters, scope, clock, intervalMs } = options;
   let refreshesByAdapter = refreshesByDatabase.get(db);
   if (refreshesByAdapter === undefined) {
     refreshesByAdapter = new WeakMap();
@@ -308,7 +345,13 @@ function coordinateRefresh(
 
   async function runRefresh(): Promise<RefreshOutcome> {
     try {
-      return await refreshScope(db, scope, adapters[scope.store]);
+      return await refreshScope({
+        db,
+        scope,
+        fetchFreeGames: adapters[scope.store],
+        clock,
+        intervalMs,
+      });
     } finally {
       if (activeRefreshes.get(key) === refresh) activeRefreshes.delete(key);
     }
@@ -322,6 +365,7 @@ function coordinateRefresh(
 export function createGiveawayCacheScopeResolver(
   getDatabase: () => Database,
   storeAdapters: StoreAdapters,
+  options: CacheScopeOptions = {},
 ): ResolveGiveawayCacheScope {
   return async function resolveGiveawayCacheScope(
     store: StoreId,
@@ -329,14 +373,20 @@ export function createGiveawayCacheScopeResolver(
   ): Promise<GiveawayCacheScopeResolution> {
     const db = getDatabase();
     const scope = { ...market, store };
-    const refresh = await coordinateRefresh(db, storeAdapters, scope);
+    const refresh = await coordinateRefresh({
+      db,
+      adapters: storeAdapters,
+      scope,
+      clock: options.clock ?? (() => new Date()),
+      intervalMs: options.monitoringIntervalMs ?? 3600000,
+    });
     if (refresh.status === "unavailable") {
       return { availability: "unavailable", giveaways: [] };
     }
 
     return {
       availability: refresh.status === "degraded" ? "degraded" : "available",
-      giveaways: await findActiveGiveaways(db, scope),
+      giveaways: await findActiveGiveaways(db, scope, options.clock?.() ?? new Date()),
     };
   };
 }
