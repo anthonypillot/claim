@@ -9,16 +9,32 @@ import {
 } from "../../db/schema.ts";
 import type { Giveaway, Market, StoreId } from "../giveaways/model.ts";
 
-type Observation = {
+type ObservationContext = {
   tx: Transaction;
   scope: Market & { store: StoreId };
-  items: readonly Giveaway[];
   now: Date;
+};
+
+type Observation = ObservationContext & { items: readonly Giveaway[] };
+
+type Occurrence = typeof giveawayOccurrences.$inferSelect;
+type Subscription = typeof discordSubscriptions.$inferSelect;
+type DetectedOccurrence = { listingId: string; occurrenceId: string };
+
+type OccurrenceChanges = ObservationContext & {
+  history: readonly Occurrence[];
+  activeGiveaways: ReadonlyMap<string, Giveaway>;
+};
+
+type EligibleAlerts = ObservationContext & {
+  subscriptions: readonly Subscription[];
+  newOccurrences: readonly DetectedOccurrence[];
 };
 
 // Called inside snapshot replacement, while the refresh marker is fenced and locked.
 export async function recordSuccessfulObservation(observation: Observation): Promise<void> {
   const { tx, scope, items, now } = observation;
+
   const subscriptions = await tx
     .select()
     .from(discordSubscriptions)
@@ -32,6 +48,7 @@ export async function recordSuccessfulObservation(observation: Observation): Pro
     )
     .orderBy(discordSubscriptions.guildId)
     .for("update");
+
   const history = await tx
     .select()
     .from(giveawayOccurrences)
@@ -42,41 +59,64 @@ export async function recordSuccessfulObservation(observation: Observation): Pro
         eq(giveawayOccurrences.country, scope.country),
       ),
     );
+
   if (!subscriptions.length && !history.length) return;
-  const active = new Map(
+
+  const activeGiveaways = new Map(
     items
       .filter((item) => Date.parse(item.freeUntil) > now.getTime())
       .map((item) => [item.id, item]),
   );
+
+  const newOccurrences = await persistOccurrenceChanges({
+    tx,
+    scope,
+    now,
+    history,
+    activeGiveaways,
+  });
+
+  await establishBaselinesAndQueueAlerts({ tx, scope, now, subscriptions, newOccurrences });
+}
+
+async function persistOccurrenceChanges(changes: OccurrenceChanges): Promise<DetectedOccurrence[]> {
+  const { tx, scope, now, history, activeGiveaways } = changes;
+
   const previousById = new Map(history.map((row) => [row.id, row]));
-  const newOccurrences: { id: string; occurrenceId: string }[] = [];
-  for (const row of history)
-    if (!active.has(row.id)) {
-      await tx
-        .update(giveawayOccurrences)
-        .set({ active: false, endedAt: row.endedAt ?? (row.freeUntil <= now ? now : null) })
-        .where(
-          and(
-            eq(giveawayOccurrences.store, scope.store),
-            eq(giveawayOccurrences.locale, scope.locale),
-            eq(giveawayOccurrences.country, scope.country),
-            eq(giveawayOccurrences.id, row.id),
-          ),
-        );
-    }
-  for (const item of active.values()) {
-    const previous = previousById.get(item.id);
-    const isNew = !previous || previous.endedAt !== null;
-    const occurrenceId = isNew ? crypto.randomUUID() : previous.occurrenceId;
-    const detectedAt = isNew ? now : previous.detectedAt;
+  const newOccurrences: DetectedOccurrence[] = [];
+
+  for (const previous of history) {
+    if (activeGiveaways.has(previous.id)) continue;
+
+    // An absence before the old deadline is not proof that its giveaway period ended.
+    const observedEnd = previous.endedAt ?? (previous.freeUntil <= now ? now : null);
+    await tx
+      .update(giveawayOccurrences)
+      .set({ active: false, endedAt: observedEnd })
+      .where(
+        and(
+          eq(giveawayOccurrences.store, scope.store),
+          eq(giveawayOccurrences.locale, scope.locale),
+          eq(giveawayOccurrences.country, scope.country),
+          eq(giveawayOccurrences.id, previous.id),
+        ),
+      );
+  }
+
+  for (const giveaway of activeGiveaways.values()) {
+    const previous = previousById.get(giveaway.id);
+    const isNewOccurrence = !previous || previous.endedAt !== null;
+    const occurrenceId = isNewOccurrence ? crypto.randomUUID() : previous.occurrenceId;
+    const detectedAt = isNewOccurrence ? now : previous.detectedAt;
+
     await tx
       .insert(giveawayOccurrences)
       .values({
         ...scope,
-        id: item.id,
+        id: giveaway.id,
         occurrenceId,
         detectedAt,
-        freeUntil: new Date(item.freeUntil),
+        freeUntil: new Date(giveaway.freeUntil),
         active: true,
         endedAt: null,
       })
@@ -90,18 +130,29 @@ export async function recordSuccessfulObservation(observation: Observation): Pro
         set: {
           occurrenceId,
           detectedAt,
-          freeUntil: new Date(item.freeUntil),
+          freeUntil: new Date(giveaway.freeUntil),
           active: true,
           endedAt: null,
         },
       });
-    if (isNew) newOccurrences.push({ id: item.id, occurrenceId });
+
+    if (isNewOccurrence) {
+      newOccurrences.push({ listingId: giveaway.id, occurrenceId });
+    }
   }
+
+  return newOccurrences;
+}
+
+async function establishBaselinesAndQueueAlerts(alerts: EligibleAlerts): Promise<void> {
+  const { tx, scope, now, subscriptions, newOccurrences } = alerts;
+
   for (const subscription of subscriptions) {
     await tx
       .insert(discordFollows)
       .values({ guildId: subscription.guildId, store: scope.store })
       .onConflictDoNothing();
+
     const [follow] = await tx
       .select()
       .from(discordFollows)
@@ -111,6 +162,7 @@ export async function recordSuccessfulObservation(observation: Observation): Pro
           eq(discordFollows.store, scope.store),
         ),
       );
+
     if (!follow?.baselineAt) {
       await tx
         .update(discordFollows)
@@ -123,7 +175,8 @@ export async function recordSuccessfulObservation(observation: Observation): Pro
         );
       continue;
     }
-    for (const occurrence of newOccurrences)
+
+    for (const occurrence of newOccurrences) {
       await tx
         .insert(discordDeliveries)
         .values({
@@ -132,7 +185,7 @@ export async function recordSuccessfulObservation(observation: Observation): Pro
           channelId: subscription.channelId,
           revision: subscription.revision,
           ...scope,
-          listingId: occurrence.id,
+          listingId: occurrence.listingId,
           occurrenceId: occurrence.occurrenceId,
           detectedAt: now,
           updatedAt: now,
@@ -140,5 +193,6 @@ export async function recordSuccessfulObservation(observation: Observation): Pro
           state: "pending",
         })
         .onConflictDoNothing();
+    }
   }
 }

@@ -11,19 +11,25 @@ export function createDiscordRateLimits(
 ) {
   function bucketHash(path: string): string {
     // Conservatively share limits across a channel/guild's routes. Never persist raw paths/IDs.
-    const major = /^\/(channels|guilds)\/\d{1,20}(?:\/|$)/.exec(path)?.[0].replace(/\/$/, "");
+    const resourcePath = /^\/(channels|guilds)\/\d{1,20}(?:\/|$)/
+      .exec(path)?.[0]
+      .replace(/\/$/, "");
+
     return createHash("sha256")
-      .update(`${tokenFingerprint}:${major ?? path}`)
+      .update(`${tokenFingerprint}:${resourcePath ?? path}`)
       .digest("hex");
   }
+
   async function check(path: string): Promise<Response | null> {
     const db = getDatabase();
     await db.insert(discordRuntime).values({ tokenFingerprint }).onConflictDoNothing();
+
     const [runtime] = await db
       .select()
       .from(discordRuntime)
       .where(eq(discordRuntime.tokenFingerprint, tokenFingerprint));
     if (runtime?.paused) return new Response(null, { status: 401 });
+
     const [bucket] = await db
       .select()
       .from(discordRateLimits)
@@ -33,24 +39,34 @@ export function createDiscordRateLimits(
           gt(discordRateLimits.blockedUntil, clock()),
         ),
       );
-    const global = Boolean(runtime?.blockedUntil && runtime.blockedUntil > clock());
-    const until = global && runtime?.blockedUntil ? runtime.blockedUntil : bucket?.blockedUntil;
-    if (!until) return null;
+
+    const isGloballyLimited = Boolean(runtime?.blockedUntil && runtime.blockedUntil > clock());
+    const blockedUntil =
+      isGloballyLimited && runtime?.blockedUntil ? runtime.blockedUntil : bucket?.blockedUntil;
+    if (!blockedUntil) return null;
+
     return Response.json(
-      { retry_after: Math.max(1, (until.getTime() - clock().getTime()) / 1000), global },
+      {
+        retry_after: Math.max(1, (blockedUntil.getTime() - clock().getTime()) / 1000),
+        global: isGloballyLimited,
+      },
       { status: 429 },
     );
   }
+
   async function postpone(path: string, milliseconds: number, global: boolean): Promise<void> {
     const db = getDatabase();
     const until = new Date(clock().getTime() + milliseconds);
     const hash = bucketHash(path);
+
     await db.transaction(async (tx) => {
-      if (global)
+      if (global) {
         await tx
           .update(discordRuntime)
           .set({ blockedUntil: sql`greatest(${discordRuntime.blockedUntil}, ${until})` })
           .where(eq(discordRuntime.tokenFingerprint, tokenFingerprint));
+      }
+
       await tx
         .insert(discordRateLimits)
         .values({ bucketHash: hash, blockedUntil: until })
@@ -60,11 +76,13 @@ export function createDiscordRateLimits(
         });
     });
   }
+
   async function pause(): Promise<void> {
     await getDatabase()
       .update(discordRuntime)
       .set({ paused: true })
       .where(eq(discordRuntime.tokenFingerprint, tokenFingerprint));
   }
+
   return { check, postpone, pause };
 }
